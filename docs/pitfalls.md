@@ -53,7 +53,29 @@ window. Two separate causes were hit:
 2. Some embedded terminal panels (e.g. an IDE/assistant terminal) swallow arrow keys. Running the
    command in **Windows Terminal** (`wt.exe`) fixed it.
 
-If keys arrive, the terminal prints `Vel cmd: [0.10, 0.00, 0.00] [walking]`.
+If keys arrive, the terminal prints `Vel cmd: [0.15, 0.00, 0.00] [walking]`.
+
+A robust way to drive the viewer without caring about window focus at all: run it inside
+`tmux` and inject keys from another shell —
+
+```bash
+tmux new-session -d -s duck "cd ~/microduck_rl && MESA_D3D12_DEFAULT_ADAPTER_NAME=NVIDIA GALLIUM_DRIVER=d3d12 uv run scripts/infer_policy.py --walking walk.onnx --new-cmd-obs"
+tmux send-keys -t duck Up        # walk
+tmux send-keys -t duck p         # random push
+tmux capture-pane -p -t duck | tail -3   # read the status lines
+```
+
+### `T` (pause inference) makes the duck fall
+
+`T` freezes the motors at their last target. Mid-stride that is not a balanced pose, so the duck
+tips over within a second. Pausing is fine for a *standing* duck; for a walking snapshot, take
+screenshots while it walks instead.
+
+### The viewer camera is static
+
+`infer_policy.py` does not track the robot and mouse-wheel zoom had no effect through WSLg, so a
+duck commanded forward leaves the frame after a few metres. Use a low command (one `Up` =
+0.15 m/s) and take the pictures early.
 
 ## Observation contract
 

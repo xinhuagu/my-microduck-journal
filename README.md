@@ -26,7 +26,7 @@ WSLg window rendered on the RTX 5090 — caught mid-stride.*
 |---|---|---|
 | RTX 5090 (Blackwell, `sm_120`) runs the official `microduck_rl` stack | ✅ verified | `warp-lang 1.12.0` / `mjlab 1.3.0` / `torch 2.9.1+cu128`, WSL2 Ubuntu 24.04 — see [docs/setup-wsl2-rtx5090.md](docs/setup-wsl2-rtx5090.md) |
 | Walking policy (`Mjlab-Velocity-Flat-MicroDuck`) | ✅ trained | 4096 envs × 10 000 iterations, all 41 checkpoints exported to ONNX — see [docs/training-log.md](docs/training-log.md) |
-| Fall recovery (`Mjlab-VelStand-*`) | 🚧 in progress | The official recipe distils a stand-up expert from a **private** wandb project (HTTP 403). Plan: train our own `StandUp` teacher, then VelStand with local checkpoints — see [docs/velstand-without-private-teachers.md](docs/velstand-without-private-teachers.md) |
+| Fall recovery (`Mjlab-VelStand-*`) | 🚧 in progress | The official recipe distils a stand-up expert from a **private** wandb project (HTTP 403). Plan: train our own `StandUp` teacher, then VelStand with local checkpoints — see [docs/velstand-without-private-teachers.md](docs/velstand-without-private-teachers.md). `StandUp` teacher training started 2026-10-10 23:57 (4096 envs); at iteration 500 it survives a push by **sitting down** rather than standing back up — see [docs/training-log.md](docs/training-log.md#microduck_stand--iteration-500-check-2026-10-11-0012) |
 | Deploy on the real robot | ⏳ waiting | pre-order; `sudo robotctl policy load walk <file>` once it arrives |
 
 ## Hardware & software

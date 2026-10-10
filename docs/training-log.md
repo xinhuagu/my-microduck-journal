@@ -10,7 +10,26 @@ iterations (24 env-steps each). Checkpoints every 250 iterations.
 | 2026-09-07 → 09-08 | **`first-walk`** | `Mjlab-Velocity-Flat-MicroDuck` | 4096 | **10 000** | 0→1000: 30 min · 0→2500: 69 min · paused overnight · ended 09-08 23:42 | walks; falls on a `P` push and cannot get up (expected for Velocity) |
 | 2026-10-10 | smoke after `git pull` to `ceca0170` | `Mjlab-Velocity-Flat-MicroDuck` | 64 | 5 | 42 s | OK, 1.5–1.75 k steps/s |
 | 2026-10-10 | export-all | — | — | 41 checkpoints → ONNX | 41 × ~13 s ≈ 9 min | `exports/first_walk_{0..10000}.onnx`, 793 766 B each |
-| 2026-10-10 | smoke | `Mjlab-VelStand-Flat-MicroDuck` | 64 | — | 14 s | **failed**: wandb 403 on Pollen's private teacher checkpoints |
+| 2026-10-10 | smoke | `Mjlab-VelStand-Flat-MicroDuck` | 64 | — | 14 s | **failed**: wandb 403 on the private teacher checkpoints |
+| 2026-10-10 23:57 → | **`microduck_stand`** (stand-up teacher) | `Mjlab-StandUp-Flat-MicroDuck` | 4096 | 6 000 max, **running** | 1.42 s/iteration, ETA ≈ 2 h 40 min | smoke 5/64 OK (2 000 steps/s); first look at iteration 500 below |
+
+## `microduck_stand` — iteration 500 check (2026-10-11 00:12)
+
+Exported `model_500.pt` while training continued and loaded it as the *standing* policy in the
+CPU viewer (`infer_policy.py --standing exports/standup_500.onnx --new-cmd-obs`), then sent a
+random 1 m/s push (`P`).
+
+| before the push | after the push |
+|---|---|
+| ![standing, 500 iterations](../results/standup-500-before-push.jpg) | ![sitting after a push, 500 iterations](../results/standup-500-after-push.jpg) |
+| stands, slightly crouched, `trunk_z ≈ 117 mm` | does not fall over — but settles into a **sit**, `trunk_z ≈ 63 mm`, and stays there |
+
+So at 500 iterations the policy has learned "don't topple" but not "get back to standing": a
+sit is a safe, cheap equilibrium. This is exactly the local optimum upstream describes in
+`microduck_velstand_env_cfg.py` ("the policy learned to sit and farm upright … gating a positive
+reward on a bad state rewards entering the state") and the reason their recovery gates are on
+tilt only. Whether the StandUp curriculum climbs out of it on its own by 2 000–3 000 iterations is
+the thing to watch next; checkpoints are every 250 iterations.
 
 ## `first-walk` details
 
