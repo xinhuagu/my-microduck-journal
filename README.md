@@ -1,14 +1,14 @@
 # my-microduck-journal
 
 **A journal of re-training the Microduck's skills from scratch on a consumer PC** — an RTX 5090
-under WSL2 on Windows 11 — with my own policies and without Pollen's private teacher checkpoints.
+under WSL2 on Windows 11 — with my own policies and without the private teacher checkpoints the official recipe depends on.
 Every step, number and dead end is written down, so that anyone with a gaming GPU can reproduce
 the pipeline. The robot itself is still on pre-order, so all results are simulation
 (`microduck_rl`) until it ships.
 
 What is different from the official setup:
 
-| | Official (Pollen) | Here |
+| | Official (upstream) | Here |
 |---|---|---|
 | Hardware | Linux workstations (COACH2, RTX 5090) | Windows 11 + WSL2 Ubuntu 24.04, RTX 5090 + Intel iGPU (hence the WSLg pitfalls) |
 | Walking policy | `alpha_walking` from wandb `441tzs6d` | `first-walk`, trained here from scratch, 4096 envs × 10 000 iterations |
@@ -26,7 +26,7 @@ WSLg window rendered on the RTX 5090 — caught mid-stride.*
 |---|---|---|
 | RTX 5090 (Blackwell, `sm_120`) runs the official `microduck_rl` stack | ✅ verified | `warp-lang 1.12.0` / `mjlab 1.3.0` / `torch 2.9.1+cu128`, WSL2 Ubuntu 24.04 — see [docs/setup-wsl2-rtx5090.md](docs/setup-wsl2-rtx5090.md) |
 | Walking policy (`Mjlab-Velocity-Flat-MicroDuck`) | ✅ trained | 4096 envs × 10 000 iterations, all 41 checkpoints exported to ONNX — see [docs/training-log.md](docs/training-log.md) |
-| Fall recovery (`Mjlab-VelStand-*`) | 🚧 in progress | The official recipe distils a stand-up expert from Pollen's **private** wandb project (HTTP 403). Plan: train our own `StandUp` teacher, then VelStand with local checkpoints — see [docs/velstand-without-private-teachers.md](docs/velstand-without-private-teachers.md) |
+| Fall recovery (`Mjlab-VelStand-*`) | 🚧 in progress | The official recipe distils a stand-up expert from a **private** wandb project (HTTP 403). Plan: train our own `StandUp` teacher, then VelStand with local checkpoints — see [docs/velstand-without-private-teachers.md](docs/velstand-without-private-teachers.md) |
 | Deploy on the real robot | ⏳ waiting | pre-order; `sudo robotctl policy load walk <file>` once it arrives |
 
 ## Hardware & software
