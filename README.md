@@ -15,10 +15,11 @@ What is different from the official setup:
 | Fall recovery | VelStand distilled from a **private** stand-up expert (`69u48n8l`) | own `StandUp` teacher + VelStand with local checkpoints (in progress) |
 | Tooling | wandb online, internal eval scripts | `WANDB_MODE=offline`, everything reproducible from this repo |
 
-![Microduck walking in MuJoCo with the self-trained 10 000-iteration policy](results/walk-10000-midstride.jpg)
+![64 Microducks in the mjlab StandUp environment, iteration-500 checkpoint](results/standup-500-64envs.jpg)
 
-*`exports/first_walk_10000.onnx` driven at 0.15 m/s in the CPU MuJoCo viewer (`scripts/infer_policy.py`),
-WSLg window rendered on the RTX 5090 — caught mid-stride.*
+*64 of the 4096 parallel `Mjlab-StandUp-Flat-MicroDuck` environments, replayed with the
+iteration-500 checkpoint in mjlab's native viewer (`uv run play ... --num-envs 64 --viewer native`)
+while the same GPU keeps training. Each duck starts an episode on the ground and has to get up.*
 
 ## Status (2026-10-10)
 

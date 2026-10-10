@@ -112,3 +112,23 @@ Harmless; the flags are `--env.scene.num-envs N` and `--agent.max-iterations N` 
 
 `wsl.exe -- bash /mnt/c/...` from Git Bash gets `/mnt/c` rewritten to a Windows path (MSYS path
 conversion). Call `wsl.exe` from PowerShell, or set `MSYS_NO_PATHCONV=1`.
+
+## Batched viewer (`uv run play`)
+
+### Viser viewer crashes on start: `add_slider ... assert max >= value >= min`
+
+`uv run play Mjlab-StandUp-Flat-MicroDuck --checkpoint-file ... --num-envs 64 --viewer viser`
+(mjlab 1.3.0) starts the Viser server and then dies in `_gui_api.py:add_slider` with an
+`AssertionError`. The native viewer works: `--viewer native` (with the WSLg env vars above) shows
+all 64 environments in one MuJoCo window — that is where the README picture comes from.
+
+### `http://localhost:8080` shows `Cannot GET /` instead of Viser
+
+Something on the Windows side already owns `127.0.0.1:8080` — here it was **NVIDIA Broadcast** —
+so WSL2's localhost forwarding never kicks in. Use the WSL IP directly (`hostname -I` inside WSL,
+e.g. `http://172.29.134.39:8080`), or free the port.
+
+### Mouse input does not reach the WSLg window through synthetic events
+
+Scroll/drag sent by automation tools (RDP-hosted WSLg window) did not move the MuJoCo camera at
+all; a real mouse does. For scripted screenshots, pick the camera in code or live with the default.
