@@ -3,8 +3,7 @@
 **A journal of re-training the Microduck's skills from scratch on a consumer PC** — an RTX 5090
 under WSL2 on Windows 11 — with my own policies and without the private teacher checkpoints the official recipe depends on.
 Every step, number and dead end is written down, so that anyone with a gaming GPU can reproduce
-the pipeline. The robot itself is still on pre-order, so all results are simulation
-(`microduck_rl`) until it ships.
+the pipeline.
 
 What is different from the official setup:
 
