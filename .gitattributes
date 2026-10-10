@@ -1,0 +1,4 @@
+# Keep LF everywhere so the shell scripts run unchanged inside WSL
+* text=auto eol=lf
+*.sh text eol=lf
+*.md text eol=lf
