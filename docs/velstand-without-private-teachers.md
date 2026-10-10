@@ -51,7 +51,12 @@ microduck_stand/model_<N>.pt (ours)      ── stand-up expert (BC) ───�
    reset by `MICRODUCK_WARM_START=1`, iterations ran):
 
    ```bash
-   MICRODUCK_WARM_START=1    MICRODUCK_STAND_EXPERT=logs/rsl_rl/microduck_stand/<run>/model_<N>.pt    MICRODUCK_WALK_ANCHOR=logs/rsl_rl/velocity/2026-09-07_20-38-41_first-walk/model_10000.pt    uv run train Mjlab-VelStand-Flat-MicroDuck --env.scene.num-envs 4096      --agent.resume True --agent.load-run first-walk-src --agent.load-checkpoint model_10000.pt      --agent.max-iterations 3000
+   MICRODUCK_WARM_START=1 \
+   MICRODUCK_STAND_EXPERT=logs/rsl_rl/microduck_stand/<run>/model_<N>.pt \
+   MICRODUCK_WALK_ANCHOR=logs/rsl_rl/velocity/2026-09-07_20-38-41_first-walk/model_10000.pt \
+   uv run train Mjlab-VelStand-Flat-MicroDuck --env.scene.num-envs 4096 \
+     --agent.resume True --agent.load-run first-walk-src --agent.load-checkpoint model_10000.pt \
+     --agent.max-iterations 3000
    ```
 
    Log excerpt from the smoke test:
