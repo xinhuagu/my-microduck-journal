@@ -1,0 +1,22 @@
+# model artefacts live on the Hugging Face Hub, not here
+*.pt
+*.onnx
+*.rknn
+
+# training/run state from microduck_rl
+logs/
+wandb/
+outputs/
+expert_cache/
+
+# secrets
+.netrc
+.env
+*.key
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+__pycache__/

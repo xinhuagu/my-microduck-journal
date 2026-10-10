@@ -1,0 +1,92 @@
+# Pitfalls and fixes
+
+Everything below actually happened on this machine (RTX 5090 + Intel iGPU, Windows 11, WSL2
+Ubuntu 24.04, WSLg 1.0.73). Newest first within each section.
+
+## Viewer / rendering (WSLg)
+
+### Black MuJoCo window, then `D3D12: Removing Device.`
+
+**Symptom.** `GALLIUM_DRIVER=d3d12 uv run scripts/infer_policy.py ...` opens a window that stays
+black; a few seconds later the process dies with `D3D12: Removing Device.` while the simulation
+loop (the `[vel 1s avg] ...` lines) was running fine.
+
+**Cause.** The machine has two GPUs (Intel iGPU + RTX 5090). Mesa's D3D12 Gallium driver inside
+WSLg picked the **Intel** adapter. Verified with a tiny GLFW probe:
+
+```
+GALLIUM_DRIVER=d3d12 -> renderer: D3D12 (Intel(R) Graphics)
+```
+
+**Fix.** Tell Mesa which adapter to use:
+
+```bash
+MESA_D3D12_DEFAULT_ADAPTER_NAME=NVIDIA GALLIUM_DRIVER=d3d12 uv run scripts/infer_policy.py ...
+# -> renderer: D3D12 (NVIDIA GeForce RTX 5090)
+```
+
+Fallback that always works (software rendering, fine for a single duck): just omit
+`GALLIUM_DRIVER` — Mesa falls back to `llvmpipe`.
+
+### Window exists (penguin icon in the taskbar) but shows nothing; title starts with `[WARN:COPY MODE]`
+
+**Symptom.** The MuJoCo window is listed by Windows (visible, not minimised), but clicking it shows
+nothing. The window title is `[WARN:COPY MODE] MuJoCo : scene (Ubuntu-24.04)`.
+
+**Cause.** WSLg's RDP-based compositor fell into "copy mode" and stopped delivering frames. It
+happened twice: once on a fresh launch, once right after the GPU had been busy with 41 ONNX exports.
+
+**Fix.** Restart WSL entirely, then relaunch:
+
+```powershell
+wsl --shutdown
+```
+
+The first graphical window after a WSL restart has always rendered correctly here.
+
+### Arrow keys do nothing in the viewer
+
+`infer_policy.py` reads keys from the **terminal's stdin** (cbreak mode), not from the MuJoCo
+window. Two separate causes were hit:
+
+1. The terminal window was minimised, so keys went to the MuJoCo window, which ignores them.
+2. Some embedded terminal panels (e.g. an IDE/assistant terminal) swallow arrow keys. Running the
+   command in **Windows Terminal** (`wt.exe`) fixed it.
+
+If keys arrive, the terminal prints `Vel cmd: [0.10, 0.00, 0.00] [walking]`.
+
+## Observation contract
+
+### `Got invalid dimensions for input: obs ... Got: 51 Expected: 61`
+
+The policy family uses a 61-D observation (48 proprio + 13-D command block: twist 3, head pose 4,
+body pose 6). `infer_policy.py` defaults to the old 51-D layout. Add `--new-cmd-obs`:
+
+```bash
+uv run scripts/infer_policy.py --walking walk.onnx --new-cmd-obs
+```
+
+## Training / tooling
+
+### `No API key configured. Use wandb login` when starting `Mjlab-VelStand-*`
+
+VelStand distils a stand-up expert and a walk anchor from Pollen's wandb project
+(`pollen-robotics/mjlab_microduck`, runs `69u48n8l` and `441tzs6d`). After `wandb login` the
+request still fails with **HTTP 403** — the project is private. The Hugging Face Hub only hosts the
+exported ONNX files, not the `.pt` checkpoints the distillation code needs. See
+[velstand-without-private-teachers.md](velstand-without-private-teachers.md).
+
+### Walking policy falls and never gets up
+
+Expected: `Mjlab-Velocity-*` has no fall-recovery curriculum. Fall recovery is the `VelStand`
+family (walk + protective fall + get-up) or the separate `StandUp` / `Roulade` skills. The CPU
+viewer has no reset key; quit with `Q` and relaunch.
+
+### `uv run train --help` grep returned nothing in a script
+
+Harmless; the flags are `--env.scene.num-envs N` and `--agent.max-iterations N` (tyro naming).
+
+### Running WSL commands from Git Bash mangles paths
+
+`wsl.exe -- bash /mnt/c/...` from Git Bash gets `/mnt/c` rewritten to a Windows path (MSYS path
+conversion). Call `wsl.exe` from PowerShell, or set `MSYS_NO_PATHCONV=1`.
