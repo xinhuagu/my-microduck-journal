@@ -1,9 +1,20 @@
 # my-microduck-journal
 
-Teaching a [Microduck](https://www.pollen-robotics.com/microduck) new skills — walking, getting
-up, and more — with [mjlab](https://github.com/mujocolab/mjlab) + PPO on an **RTX 5090 under
-WSL2**: setup notes, pitfalls, and a training log. Everything here was run on one consumer PC; the
-robot itself is still on pre-order, so all results are simulation (`microduck_rl`) until it ships.
+Pollen ships a [Microduck](https://www.pollen-robotics.com/microduck) that already walks, gets up,
+kicks and picks things up. This journal is about doing it **differently**: re-training those
+skills from scratch on one consumer PC — an **RTX 5090 under WSL2 on Windows 11**, not a Linux
+workstation — with policies that are entirely my own, and a fall-recovery pipeline that does not
+need Pollen's private wandb teacher checkpoints. Every step, number and dead end is written down.
+The robot itself is still on pre-order, so all results are simulation (`microduck_rl`) until it ships.
+
+What is different from the official setup:
+
+| | Official (Pollen) | Here |
+|---|---|---|
+| Hardware | Linux workstations (COACH2, RTX 5090) | Windows 11 + WSL2 Ubuntu 24.04, RTX 5090 + Intel iGPU (hence the WSLg pitfalls) |
+| Walking policy | `alpha_walking` from wandb `441tzs6d` | `first-walk`, trained here from scratch, 4096 envs × 10 000 iterations |
+| Fall recovery | VelStand distilled from a **private** stand-up expert (`69u48n8l`) | own `StandUp` teacher + VelStand with local checkpoints (in progress) |
+| Tooling | wandb online, internal eval scripts | `WANDB_MODE=offline`, everything reproducible from this repo |
 
 ![Microduck walking in MuJoCo with the self-trained 10 000-iteration policy](results/walk-10000-midstride.jpg)
 
