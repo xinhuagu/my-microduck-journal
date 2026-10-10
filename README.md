@@ -52,7 +52,7 @@ docs/
   setup-wsl2-rtx5090.md             environment, install, smoke test
   pitfalls.md                       every problem hit so far, with the fix
   training-log.md                   one row per run: task, envs, iterations, time, outcome
-  velstand-without-private-teachers.md   how to train fall recovery without Pollen's wandb
+  velstand-without-private-teachers.md   how to train fall recovery without the private wandb teachers
 scripts/
   export_all.sh                     export every checkpoint of a run to ONNX
   run_viewer.sh                     launch the CPU MuJoCo viewer with the right env vars
