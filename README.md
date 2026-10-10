@@ -1,11 +1,10 @@
 # my-microduck-journal
 
-Pollen ships a [Microduck](https://www.pollen-robotics.com/microduck) that already walks, gets up,
-kicks and picks things up. This journal is about doing it **differently**: re-training those
-skills from scratch on one consumer PC — an **RTX 5090 under WSL2 on Windows 11**, not a Linux
-workstation — with policies that are entirely my own, and a fall-recovery pipeline that does not
-need Pollen's private wandb teacher checkpoints. Every step, number and dead end is written down.
-The robot itself is still on pre-order, so all results are simulation (`microduck_rl`) until it ships.
+**A journal of re-training the Microduck's skills from scratch on a consumer PC** — an RTX 5090
+under WSL2 on Windows 11 — with my own policies and without Pollen's private teacher checkpoints.
+Every step, number and dead end is written down, so that anyone with a gaming GPU can reproduce
+the pipeline. The robot itself is still on pre-order, so all results are simulation
+(`microduck_rl`) until it ships.
 
 What is different from the official setup:
 
