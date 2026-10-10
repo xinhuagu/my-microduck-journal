@@ -1,9 +1,14 @@
 # my-microduck-journal
 
-Training a [Microduck](https://www.pollen-robotics.com/microduck) to walk and get back up with
-[mjlab](https://github.com/mujocolab/mjlab) + PPO on an **RTX 5090 under WSL2** — setup notes,
-pitfalls, and a training log. Everything here was run on one consumer PC; the robot itself is
-still on pre-order, so all results are simulation (`microduck_rl`) until it ships.
+Teaching a [Microduck](https://www.pollen-robotics.com/microduck) new skills — walking, getting
+up, and more — with [mjlab](https://github.com/mujocolab/mjlab) + PPO on an **RTX 5090 under
+WSL2**: setup notes, pitfalls, and a training log. Everything here was run on one consumer PC; the
+robot itself is still on pre-order, so all results are simulation (`microduck_rl`) until it ships.
+
+![Microduck walking in MuJoCo with the self-trained 10 000-iteration policy](results/walk-10000-midstride.jpg)
+
+*`exports/first_walk_10000.onnx` driven at 0.15 m/s in the CPU MuJoCo viewer (`scripts/infer_policy.py`),
+WSLg window rendered on the RTX 5090 — caught mid-stride.*
 
 ## Status (2026-10-10)
 
