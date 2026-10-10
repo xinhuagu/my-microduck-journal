@@ -1,0 +1,23 @@
+diff --git a/src/mjlab_microduck/tasks/microduck_velstand_env_cfg.py b/src/mjlab_microduck/tasks/microduck_velstand_env_cfg.py
+index 929c4bb2..46f00666 100644
+--- a/src/mjlab_microduck/tasks/microduck_velstand_env_cfg.py
++++ b/src/mjlab_microduck/tasks/microduck_velstand_env_cfg.py
+@@ -216,6 +216,7 @@ Phases (as before, but with a recovery backstop):
+ """
+ 
+ import math
++import os
+ 
+ from mjlab.envs import ManagerBasedRlEnvCfg
+ from mjlab.managers import (
+@@ -878,6 +879,10 @@ MicroduckVelStandRlCfg = RslRlOnPolicyRunnerCfg(
+         symmetry_cfg=None,
+         bc_cfg={
+             **default_bc_cfg(), "coef": EXPERT_BC_COEF, "gate_tilt_deg": EXPERT_BC_GATE_TILT_DEG,
++            # Local teachers (no wandb needed): MICRODUCK_STAND_EXPERT / MICRODUCK_WALK_ANCHOR = path to a
++            # model_*.pt; distill._resolve_checkpoint prefers these over the wandb run paths.
++            **({"checkpoint_path": os.environ["MICRODUCK_STAND_EXPERT"]} if os.environ.get("MICRODUCK_STAND_EXPERT") else {}),
++            **({"anchor_checkpoint_path": os.environ["MICRODUCK_WALK_ANCHOR"]} if os.environ.get("MICRODUCK_WALK_ANCHOR") else {}),
+             **({"body_slice": (55, 61)} if ENABLE_BODY_CONTROL else {}),
+             **({"unanchor_turn_in_place": True} if ENABLE_YAW_FIX else {}),
+         } if ENABLE_EXPERT_BC else None,

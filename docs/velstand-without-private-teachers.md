@@ -1,7 +1,7 @@
 # Fall recovery (VelStand) without Pollen's private teachers
 
-**Status: in progress (2026-10-10).** This page states the problem and the plan; results will be
-appended as they come in.
+**Status: teacher training in progress (2026-10-11).** Plumbing for the VelStand stage is done and
+smoke-tested; results will be appended as they come in.
 
 ## The problem
 
@@ -23,25 +23,48 @@ checkpoints with an `actor_state_dict`.
 Upstream's own notes say why the expert matters: without it (their "Run-2", 1 085 iterations)
 the policy recorded **zero** recoveries.
 
-## The plan
+## The plan — and the plumbing, verified (2026-10-11 00:40)
 
 ```
 first-walk/model_10000.pt (ours, walks)  ── warm start + walk anchor ──┐
                                                                        ├─► VelStand
-StandUp/model_<N>.pt (ours, gets up)     ── stand-up expert (BC) ──────┘
+microduck_stand/model_<N>.pt (ours)      ── stand-up expert (BC) ──────┘
 ```
 
-1. Train a stand-up teacher from scratch — pure PPO, no teacher needed:
-   `uv run train Mjlab-StandUp-Flat-MicroDuck --env.scene.num-envs 4096`
-2. Point VelStand at local files. `distill._resolve_checkpoint` already prefers
-   `checkpoint_path` / `anchor_checkpoint_path` over the wandb run paths, so the change is a few
-   lines in `microduck_velstand_env_cfg.py` (`bc_cfg`) plus `WARM_START_RUN` → a local checkpoint.
-   The diff will live in `patches/`.
-3. `MICRODUCK_WARM_START=1 uv run train Mjlab-VelStand-Flat-MicroDuck --env.scene.num-envs 4096 --agent.resume True --agent.load-checkpoint <first-walk/model_10000.pt>`
-   for ~1 500 iterations (upstream's v7 used 1 500 from a walk checkpoint).
-4. Evaluate like upstream: push falls at 1.0 / 1.2 m/s, get-up rate; walk sweep for yaw drift at
-   0.3 / 0.4 m/s; pick the checkpoint by behaviour, not by reward (upstream saw checkpoints 500 and
-   1 499 drift in opposite yaw directions while the metrics looked identical).
+1. **Stand-up teacher from scratch** — pure PPO, no teacher needed:
+   `uv run train Mjlab-StandUp-Flat-MicroDuck --env.scene.num-envs 4096 --agent.max-iterations 6000`
+   (running; see [training-log.md](training-log.md)).
+2. **Local teachers instead of wandb.** `distill._resolve_checkpoint` already prefers
+   `checkpoint_path` / `anchor_checkpoint_path` over the wandb run paths; the only change needed is
+   to feed them in. [`patches/velstand-local-teachers.patch`](../patches/velstand-local-teachers.patch)
+   (5 lines in `microduck_velstand_env_cfg.py`) reads two environment variables:
+
+   | variable | meaning |
+   |---|---|
+   | `MICRODUCK_STAND_EXPERT` | path to the stand-up teacher `model_*.pt` → `bc_cfg["checkpoint_path"]` |
+   | `MICRODUCK_WALK_ANCHOR` | path to the walk checkpoint `model_*.pt` → `bc_cfg["anchor_checkpoint_path"]` |
+
+3. **Warm start from a local run.** mjlab resolves `--agent.load-run` by regex *inside*
+   `logs/rsl_rl/<experiment_name>/`, so the walk run is exposed there with a symlink:
+   `ln -s ../velocity/2026-09-07_20-38-41_first-walk logs/rsl_rl/velstand/first-walk-src`.
+4. **Launch** (smoke-tested with 5 iterations × 64 envs — expert loaded, anchor loaded, counters
+   reset by `MICRODUCK_WARM_START=1`, iterations ran):
+
+   ```bash
+   MICRODUCK_WARM_START=1    MICRODUCK_STAND_EXPERT=logs/rsl_rl/microduck_stand/<run>/model_<N>.pt    MICRODUCK_WALK_ANCHOR=logs/rsl_rl/velocity/2026-09-07_20-38-41_first-walk/model_10000.pt    uv run train Mjlab-VelStand-Flat-MicroDuck --env.scene.num-envs 4096      --agent.resume True --agent.load-run first-walk-src --agent.load-checkpoint model_10000.pt      --agent.max-iterations 3000
+   ```
+
+   Log excerpt from the smoke test:
+
+   ```
+   [distill] expert BC ON: stand expert (iter 1500) on tilt>35.0° coef=1.0; walk anchor ON on tilt<25.0° coef=1.0
+   [INFO]: Loading model checkpoint from: logs/rsl_rl/velstand/first-walk-src/model_10000.pt
+   [mdp] Patch 5: WARM START from .../model_10000.pt — common_step_counter 240024 → 0, iteration → 0
+   ```
+
+5. Evaluate like upstream: push falls, get-up rate, walk sweep for yaw drift; pick the checkpoint by
+   behaviour, not by reward (upstream saw checkpoints 500 and 1 499 drift in opposite yaw directions
+   while the metrics looked identical).
 
 ## Alternatives considered
 
