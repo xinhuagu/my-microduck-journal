@@ -3,7 +3,7 @@
 # any directory: `bash scripts/train_velstand_v1.sh` — it cd's into ~/microduck_rl itself. Companion scripts are
 # looked up next to this file.
 # VelStand full training: warm start from first-walk model_10000, local stand-up expert + walk anchor.
-#   wsl_velstand_train.sh <standup_iter> [max_iterations]
+#   train_velstand_v1.sh <standup_iter> [max_iterations]
 export PATH="$HOME/.local/bin:$PATH"
 export WANDB_MODE=offline MUJOCO_GL=egl PYOPENGL_PLATFORM=egl
 cd "$HOME/microduck_rl" || exit 1

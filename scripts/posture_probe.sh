@@ -3,7 +3,7 @@
 # any directory: `bash scripts/posture_probe.sh` — it cd's into ~/microduck_rl itself. Companion scripts are
 # looked up next to this file.
 # Measure body pitch and leg joint angles before and after pushes, using the viewer's --debug prints.
-#   wsl_posture_probe.sh <policy.onnx> [flag=--walking] [pushes=3]
+#   posture_probe.sh <policy.onnx> [flag=--walking] [pushes=3]
 export PATH="$HOME/.local/bin:$PATH"
 ONNX="${1:?onnx}"; FLAG="${2:---walking}"; PUSHES="${3:-3}"; PREKEYS="${4:-}"   # e.g. "Up Up" = walk at 0.30 m/s before the pushes
 cd "$HOME/microduck_rl" || exit 1

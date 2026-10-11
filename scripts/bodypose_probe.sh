@@ -3,7 +3,7 @@
 # any directory: `bash scripts/bodypose_probe.sh` — it cd's into ~/microduck_rl itself. Companion scripts are
 # looked up next to this file.
 # Body-pose command probe: how far does the policy actually crouch / tilt when commanded (standing)?
-#   wsl_bodypose_probe.sh <policy.onnx> [flag=--walking]
+#   bodypose_probe.sh <policy.onnx> [flag=--walking]
 # Uses the viewer's --debug prints (CoM height, projected gravity) and tmux key injection:
 # B (body-pose mode), Down = z -10 mm/key (viewer cap +-30 mm), Left/Right = pitch -/+10 deg, A/E = roll +/-10 deg.
 export PATH="$HOME/.local/bin:$PATH"

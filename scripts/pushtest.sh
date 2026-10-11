@@ -4,7 +4,7 @@
 # looked up next to this file.
 # Generic push test. Exports checkpoints of a run, loads each ONNX in the CPU viewer (tmux, pane
 # captured with pipe-pane), optionally sends pre-keys (e.g. Up = walk), then N random pushes.
-#   TASK=<task id> RUNDIR=<run dir> FLAG=--walking PREFIX=velstand PREKEYS="Up" wsl_pushtest_generic.sh 1250 2000 2999
+#   TASK=<task id> RUNDIR=<run dir> FLAG=--walking PREFIX=velstand PREKEYS="Up" pushtest.sh 1250 2000 2999
 export PATH="$HOME/.local/bin:$PATH"
 export WANDB_MODE=offline MUJOCO_GL=egl PYOPENGL_PLATFORM=egl
 cd "$HOME/microduck_rl" || exit 1
