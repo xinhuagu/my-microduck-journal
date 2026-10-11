@@ -123,32 +123,57 @@ class Duck:
             return torch.stack([s * cy, sign * s * cy, sign * s * sy, s * sy], dim=1)
         raise ValueError(kind)
 
+    def action_for_targets(self, q_target: torch.Tensor) -> torch.Tensor:
+        """Raw action that makes the joint-position action term target `q_target` (target = default + raw*scale + offset)."""
+        term = self.u.action_manager.get_term("joint_pos")
+        scale, offset = term.scale, term.offset
+        return (q_target - self.default_joint_pos - offset) / scale
+
+    def hold(self, seconds: float, q_target: torch.Tensor | None = None):
+        """Step with the policy off: joint targets = `q_target` (default pose if None). Lets a ground spawn
+        drop and settle in a sprawled posture, so the get-up clock starts from a real resting state."""
+        act = torch.zeros(self.n, self.u.action_manager.total_action_dim, device=self.dev) if q_target is None \
+            else self.action_for_targets(q_target)
+        for _ in range(int(round(seconds / self.dt))):
+            self.env.step(act)
+
     def spawn(self, kind: str, settle_steps: int = 0):
-        """Reset every env, then overwrite the root pose / joints with the requested spawn."""
+        """Reset every env, then overwrite the root pose / joints with the requested spawn.
+        Ground spawns get a random sprawled joint pose (±0.5 rad around default, inside the soft limits),
+        are dropped from 12 cm and held in that pose for 1 s (policy off) before the trial starts."""
         self.env.reset()
-        z = 0.122 if kind == "upright" else 0.07   # default_root_state has z = 0 (root at the origin), so spawn just above standing height
+        z = 0.122 if kind == "upright" else 0.12   # default_root_state has z = 0 (root at the origin), so spawn above the ground
         state = torch.zeros(self.n, 13, device=self.dev)
         state[:, :3] = self.origins
         state[:, 2] += z
         state[:, 3:7] = self._quats(kind)
         self.robot.write_root_state_to_sim(state)
-        self.robot.write_joint_state_to_sim(self.default_joint_pos.clone(), torch.zeros_like(self.default_joint_pos))
+        q = self.default_joint_pos.clone()
+        if kind != "upright":
+            q = q + (torch.rand(q.shape, device=self.dev, generator=self.gen) * 2 - 1) * 0.5
+            lim = self.robot.data.soft_joint_pos_limits
+            q = torch.maximum(torch.minimum(q, lim[..., 1]), lim[..., 0])
+        self._spawn_q = q
+        self.robot.write_joint_state_to_sim(q, torch.zeros_like(q))
         self.u.scene.write_data_to_sim()
         self.u.sim.forward()
         self.set_head_zero()
         self.set_body(0.0, 0.0, 0.0)
+        if kind != "upright":
+            self.hold(1.0, self._spawn_q)
         if os.environ.get("BATTERY_DEBUG"):
             m = self.measure()
-            print(f"[spawn {kind}] stand_z={self.stand_z:.3f} z after write: min {float(m['z'].min()):.3f} max {float(m['z'].max()):.3f} tilt max {float(m['tilt'].max()):.1f}")
+            print(f"[spawn {kind}] z: min {float(m['z'].min()):.3f} med {float(m['z'].median()):.3f} max {float(m['z'].max()):.3f}  tilt med {float(m['tilt'].median()):.1f}")
         for _ in range(settle_steps):
             self.step()
 
     def push(self, speed: float):
-        """Add a horizontal velocity of `speed` m/s in a random direction to every trunk."""
+        """Set the trunk's world xy velocity to `speed` m/s in a random direction (overwrites, like the
+        viewer's `random_push` and the training event push_by_setting_velocity)."""
         ang = torch.rand(self.n, device=self.dev, generator=self.gen) * 2 * math.pi
         vel = self.robot.data.root_link_vel_w.clone()
-        vel[:, 0] += speed * torch.cos(ang)
-        vel[:, 1] += speed * torch.sin(ang)
+        vel[:, 0] = speed * torch.cos(ang)
+        vel[:, 1] = speed * torch.sin(ang)
         self.robot.write_root_link_velocity_to_sim(vel)
         self.u.scene.write_data_to_sim()
 
@@ -218,24 +243,31 @@ def trial_getup(duck: Duck, kinds=("face_down", "face_up", "on_side"), seconds: 
     rows = []
     for kind in kinds:
         duck.spawn(kind)
+        m0 = duck.measure()
+        down0 = (m0["z"] < DOWN_Z) | (m0["tilt"] > 45.0)   # only ducks that really start on the ground count
         duck.set_twist(0, 0, 0, standing=True)
         tr = duck.rollout(seconds)
         t_up = recovery_stats(tr, duck.dt)
+        t_up[~down0] = float("nan")
         last = slice(-int(round(1.0 / duck.dt)), None)
         end_pitch = tr["pitch"][last].mean(0)
-        end_up = up_mask(tr)[last].all(0)
+        end_up = up_mask(tr)[last].all(0) & down0
+        n_down = max(int(down0.sum()), 1)
+        ok = ~torch.isnan(t_up)
         rows.append({
-            "spawn": kind, "n": duck.n,
-            "recovered": float((~torch.isnan(t_up)).float().mean()),
+            "spawn": kind, "n": duck.n, "started_down": float(down0.float().mean()),
+            "recovered": float(ok.float().sum() / n_down),
             "median_time_s": nanmedian(t_up),
-            "p90_time_s": float(torch.quantile(t_up[~torch.isnan(t_up)], 0.9)) if (~torch.isnan(t_up)).any() else float("nan"),
-            "upright_at_end": float(end_up.float().mean()),
+            "p90_time_s": float(torch.quantile(t_up[ok], 0.9)) if ok.any() else float("nan"),
+            "upright_at_end": float(end_up.float().sum() / n_down),
             "end_pitch_deg_median": float(end_pitch[end_up].median()) if end_up.any() else float("nan"),
         })
     return rows
 
 
 def trial_push(duck: Duck, speeds=(1.0, 1.2), modes=("standing", "walking"), seconds: float = 6.0):
+    if os.environ.get("BATTERY_PUSH_SPEEDS"):
+        speeds = tuple(float(x) for x in os.environ["BATTERY_PUSH_SPEEDS"].split(","))
     rows = []
     for mode in modes:
         for speed in speeds:
@@ -272,9 +304,11 @@ def trial_tracking(duck: Duck, seconds: float = 8.0):
         tr = duck.rollout(seconds)
         last = slice(int(round(3.0 / duck.dt)), None)   # average over the last 5 s
         warm = int(round(1.0 / duck.dt))                 # the first second is the spawn settling
+        wz_env = tr["wz"][last].mean(0)                  # per-env mean yaw rate over the last 5 s
         rows.append({
             "case": label, "cmd_vx": vx, "cmd_wz": wz,
             "vx": float(tr["vx"][last].mean()), "wz": float(tr["wz"][last].mean()),
+            "wz_abs_p50": float(wz_env.abs().median()), "wz_abs_p90": float(torch.quantile(wz_env.abs(), 0.9)),
             "fell": float((tr["z"][warm:] < DOWN_Z).any(0).float().mean()),
         })
     return rows
@@ -326,9 +360,9 @@ def main():
     with torch.inference_mode():   # resets write into buffers the policy/env created in inference mode; stay inside it
         if "getup" in only:
             res["getup"] = trial_getup(duck)
-            print("\n| spawn | recovered | median s | p90 s | upright at end | end pitch |\n|---|---|---|---|---|---|")
+            print("\n| spawn | started down | recovered | median s | p90 s | upright at end | end pitch |\n|---|---|---|---|---|---|---|")
             for r in res["getup"]:
-                print(f"| {r['spawn']} | {fmt_pct(r['recovered'])} | {r['median_time_s']:.2f} | {r['p90_time_s']:.2f} | {fmt_pct(r['upright_at_end'])} | {r['end_pitch_deg_median']:.1f}° |")
+                print(f"| {r['spawn']} | {fmt_pct(r['started_down'])} | {fmt_pct(r['recovered'])} | {r['median_time_s']:.2f} | {r['p90_time_s']:.2f} | {fmt_pct(r['upright_at_end'])} | {r['end_pitch_deg_median']:.1f}° |")
         if "push" in only:
             res["push"] = trial_push(duck)
             print("\n| mode | push | fell | recovered of fallen | median recovery s | upright at end |\n|---|---|---|---|---|---|")
@@ -336,9 +370,9 @@ def main():
                 print(f"| {r['mode']} | {r['push_mps']:.1f} m/s | {fmt_pct(r['fell'])} | {fmt_pct(r['recovered_of_fallen'])} | {r['median_recovery_s']:.2f} | {fmt_pct(r['upright_at_end'])} |")
         if "tracking" in only:
             res["tracking"] = trial_tracking(duck)
-            print("\n| case | vx achieved / cmd | wz achieved / cmd | fell |\n|---|---|---|---|")
+            print("\n| case | vx achieved / cmd | wz achieved / cmd | per-env \\|wz\\| p50 / p90 | fell |\n|---|---|---|---|---|")
             for r in res["tracking"]:
-                print(f"| {r['case']} | {r['vx']:+.2f} / {r['cmd_vx']:+.2f} | {r['wz']:+.2f} / {r['cmd_wz']:+.2f} | {fmt_pct(r['fell'])} |")
+                print(f"| {r['case']} | {r['vx']:+.2f} / {r['cmd_vx']:+.2f} | {r['wz']:+.2f} / {r['cmd_wz']:+.2f} | {r['wz_abs_p50']:.2f} / {r['wz_abs_p90']:.2f} | {fmt_pct(r['fell'])} |")
         if "body" in only:
             res["body"] = trial_body(duck)
             print("\n| case | dz mm | roll ° | pitch ° | fell |\n|---|---|---|---|---|")

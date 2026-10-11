@@ -344,6 +344,69 @@ the table above, so the sequential script, not the policy, was at fault (the vie
 state after a reset is suspect). Pipeline part 3 still uses the sequential probe for v4; the v4 and
 v5 numbers below are re-measured with the single-launch probe.
 
+## Evaluation battery: first statistics (2026-10-11 21:10)
+
+Until now every number came from one duck in the CPU viewer with keys injected through tmux — a
+smoke test. [`scripts/eval_battery.py`](../scripts/eval_battery.py) (wrapper
+[`eval_battery.sh`](../scripts/eval_battery.sh)) runs the policy from its rsl_rl checkpoint in
+**256 parallel mjlab environments on the GPU, fixed seed**, with the task's domain randomisation on
+and its interval events (training pushes) off, and forces spawn states and commands directly:
+
+- *Get-up per spawn type*: face-down / face-up / on-side orientation from the StandUp recipe, a random
+  sprawled joint pose (±0.5 rad), dropped from 12 cm and held for 1 s with the policy off; then the
+  clock starts. "Recovered" = trunk ≥ 100 mm and tilt ≤ 15° for one continuous second.
+- *Push falls*: standing or walking at 0.30 m/s for 3 s, then the trunk's horizontal velocity is set to
+  the push speed in a random direction (the viewer's and the training event's definition); "fell" =
+  trunk below 90 mm; recovery as above, timed from the push.
+- *Tracking*: 8 s per command, mean over the last 5 s of body-frame forward speed and yaw rate; the
+  per-env |yaw| median / p90 says whether a drift is systematic or a lottery across randomised ducks.
+- *Body-pose commands while standing*: 5 s per command, last 2 s measured.
+
+A full battery takes ≈ 15 min on the 5090 while a training run shares the GPU. The script needs a
+`.pt` checkpoint (it builds the rsl_rl runner, teachers included); ONNX input is on the list so the
+official policy can be measured with the same code.
+
+**VelStand v2 `model_5750`** (`Mjlab-VelStand-Flat-MicroDuck`, seed 0, 256 envs):
+
+| get-up from | started down | recovered | median | p90 | upright at end | end pitch |
+|---|---|---|---|---|---|---|
+| face-down | 100 % | **99 %** | 0.32 s | 0.75 s | 99 % | −0.1° |
+| face-up | 100 % | **93 %** | 0.62 s | 0.84 s | 93 % | 0.0° |
+| on side | 100 % | **93 %** | 0.66 s | 1.04 s | 93 % | −0.1° |
+
+| push | standing: fell | recovered of fallen | median | walking: fell | recovered of fallen | median |
+|---|---|---|---|---|---|---|
+| 0.6 m/s | 20 % | 92 % | 0.84 s | 30 % | 95 % | 1.06 s |
+| 0.8 m/s | 79 % | 88 % | 1.02 s | 77 % | 87 % | 1.08 s |
+| 1.0 m/s | 93 % | 87 % | 1.06 s | 95 % | 84 % | 1.06 s |
+| 1.2 m/s | 100 % | 76 % | 1.04 s | 97 % | 86 % | 1.12 s |
+
+| command | `5750`: achieved | `5999`: achieved | falls |
+|---|---|---|---|
+| walk 0.15 / 0.30 / 0.45 m/s | 0.09 / 0.18 / 0.25 m/s | 0.10 / 0.21 / 0.30 m/s | 0 % |
+| yaw drift while walking 0.30 / 0.45 | −0.04 / −0.04 rad/s | −0.07 / −0.16 rad/s | |
+| turn in place +0.3 / +0.6 / +1.0 / −1.0 rad/s | 0.02 / **0.46** / 0.91 / −1.00 | 0.02 / **0.70** / 1.13 / −0.87 | 0 % |
+
+Body-pose commands on `5750`: crouch −30 mm → −0.4 mm, pitch ±10° → +3.7 / −2.5°, ±20° → +4.2 /
+−2.0°, roll ±10° → +1.9 / −1.3° — v2 does not track them, as the single-duck probe said.
+
+Reading, and two corrections to earlier sections:
+
+1. **Get-ups are sub-second** from every spawn type, straight at the end (pitch ≈ 0°); face-up and
+   on-side fail 7 % of the time within 8 s. The push-recovery numbers (76–95 % of falls, median
+   ≈ 1 s) are the ones to compare with the upstream table's "get-up after push fall 93 / 95 %" at 1.0 /
+   1.2 m/s — ours are lower at 1.0 m/s standing (87 %) and clearly lower at 1.2 m/s standing (76 %).
+   That is the honest baseline the next rounds have to beat.
+2. **The viewer under-reports turning.** In the batched environment both v2 checkpoints turn at
+   0.6 rad/s (0.46 / 0.70) where the viewer probe gave ≈ 0; the 0.3 rad/s dead zone (0.02) is real in
+   both. So "VelStand lost the 0.6 turn" in the turning section below was a viewer artefact; the
+   turning round is still justified by the 0.3 dead zone and the 1.0 overshoot / asymmetry
+   (1.13 / −0.87 on 5999).
+3. **The viewer's yaw-drift lottery shrinks in the batched environment**: 5999 drifts −0.07 rad/s
+   over 256 randomised ducks, not +0.47. The per-checkpoint sweep stays useful, but it should be done
+   with the battery's tracking trial, not the viewer; pipeline part 4 still uses the viewer sweep
+   (it was launched before this), so its picks will be re-checked with the battery afterwards.
+
 ## Turning: where the bottleneck is, and what ours does (2026-10-11 15:20)
 
 Upstream's own notes (in the VelStand config and `docs/velstand_policy.md`) call the deployed policy
@@ -423,8 +486,7 @@ sweep → push tests and all three probes on the pick. Checkpoints are now chose
 5. Body-pose round (pipeline part 3, queued): teacher v3 + VelStand v4 with crouch / tilt that
    actually track; then a protective-fall round (tuck the head, land softly) in the teacher.
 6. Turning round (pipeline part 4, queued): walk teacher v2 with the yaw fixes, sweep, VelStand v5 anchored to it.
-7. Fixed-seed, batched evaluation battery (get-up per spawn type, push falls while walking, speed /
-   yaw tracking, impact forces per body part) — the regression test for every later round.
+7. ~~Fixed-seed, batched evaluation battery~~ Done (first version; impact forces and ONNX input still to add) — the regression test for every later round.
 8. The official walk ONNX measured with the same probes (apples to apples).
 9. GitHub Release per round: ONNX files + config + sha256.
 10. Speed round (walk teacher v3: fine linear-velocity term, more high-speed commands) and the
