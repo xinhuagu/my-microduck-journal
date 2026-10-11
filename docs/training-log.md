@@ -353,6 +353,16 @@ upstream), `turn_in_place_min_frac` 0.4 → 0.1 so slow turns are sampled, and a
 inherits the turning, with the in-place fraction raised so the anchor actually sees those frames.
 Numbers to beat: 0.3 / 0.6 / 1.0 rad/s in place, drift < 0.05 rad/s at 0.30 and 0.45 m/s.
 
+Queued (2026-10-11 15:28) as pipeline part 4, [`scripts/pipeline_round3_turning.sh`](../scripts/pipeline_round3_turning.sh),
+after the body-pose round: [`patches/turn.patch`](../patches/turn.patch) adds `MICRODUCK_TURN=1`
+to the walk recipe (turn-in-place bucket 25 % of envs sampled from 10 % of the range, plus
+`track_yaw_rate_fine` std 0.35 / weight 2.0 next to the stock term — the additive variant);
+smoke-tested on both tasks. Steps: sweep the v4 checkpoints → walk teacher v2 (3 000 iterations,
+warm start from `first_walk_10000`) → sweep its checkpoints for drift and 0.3 / 0.6 / 1.0 rad/s →
+VelStand v5 warm-started from the v4 pick with the new walk anchor and the same body-wide teacher →
+sweep → push tests and all three probes on the pick. Checkpoints are now chosen by score
+(turn 0.3 + turn 0.6 + ½ turn 1.0 − 2 |drift|), never "the last one".
+
 ## Next
 
 1. ~~StandUp v2 → posture probe: does it end at pitch ≈ 0° after a push?~~ Yes (0.2°).
@@ -361,5 +371,5 @@ Numbers to beat: 0.3 / 0.6 / 1.0 rad/s in place, drift < 0.05 rad/s at 0.30 and 
 4. VelStand v3 (Rough-Backlash, 3 000, running) warm-started from v2; push tests.
 5. Body-pose round (pipeline part 3, queued): teacher v3 + VelStand v4 with crouch / tilt that
    actually track; then a protective-fall round (tuck the head, land softly) in the teacher.
-6. Turning round: walk teacher v2 with the yaw fixes above, sweep, then VelStand anchored to it.
+6. Turning round (pipeline part 4, queued): walk teacher v2 with the yaw fixes, sweep, VelStand v5 anchored to it.
 7. Per-spawn-type get-up battery (fixed seed, batched), README get-up sequence, release of the ONNX files.

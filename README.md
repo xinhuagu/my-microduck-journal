@@ -94,6 +94,7 @@ scripts/
   pipeline_round1_*.sh              teacher v2 → continue → VelStand v2 → v3, with probes and push tests
   pipeline_round1b_resume_after_sleep.sh   the resume after the PC went to sleep mid-run
   pipeline_round2_body_pose.sh      teacher v3 (body-pose) → VelStand v4
+  pipeline_round3_turning.sh        walk teacher v2 (yaw fixes) → sweeps → VelStand v5
   pushtest.sh                       8 random pushes in the viewer: moved / went down / upright at the end
   posture_probe.sh                  trunk height, pitch, roll and joint angles before and after pushes
   bodypose_probe.sh                 commanded vs measured crouch / tilt
@@ -103,6 +104,7 @@ patches/                            config diffs against upstream microduck_rl, 
   velstand-local-teachers.patch     MICRODUCK_STAND_EXPERT / MICRODUCK_WALK_ANCHOR = local checkpoint paths
   standup-stand-straight.patch      MICRODUCK_STANDUP_STRAIGHT=1 (teacher v2)
   body-wide.patch                   MICRODUCK_BODY_WIDE=1 (teacher v3 / VelStand v4, in progress)
+  turn.patch                        MICRODUCK_TURN=1 (walk teacher v2 / VelStand v5, queued)
 results/                            screenshots used in this README and the docs
 ```
 
@@ -120,6 +122,7 @@ git checkout ceca0170                             # the upstream commit every ru
 git apply /path/to/my-microduck-journal/patches/velstand-local-teachers.patch
 git apply /path/to/my-microduck-journal/patches/standup-stand-straight.patch
 git apply /path/to/my-microduck-journal/patches/body-wide.patch   # only needed for the body-pose round
+git apply /path/to/my-microduck-journal/patches/turn.patch        # only needed for the turning round
 UV_HTTP_TIMEOUT=600 uv sync --locked              # ~2 GB of CUDA wheels on first run
 
 # smoke test (always first), then the real thing

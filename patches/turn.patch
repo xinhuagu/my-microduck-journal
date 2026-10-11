@@ -1,0 +1,34 @@
+diff --git a/src/mjlab_microduck/tasks/microduck_velocity_env_cfg.py b/src/mjlab_microduck/tasks/microduck_velocity_env_cfg.py
+index 45a1f6d5..21e19a2a 100644
+--- a/src/mjlab_microduck/tasks/microduck_velocity_env_cfg.py
++++ b/src/mjlab_microduck/tasks/microduck_velocity_env_cfg.py
+@@ -17,6 +17,7 @@ gait/feet terms, curriculum-ramped action-rate smoothing), with:
+ """
+ 
+ import math
++import os
+ from copy import deepcopy
+ 
+ NUM_STEPS_PER_ENV = 24
+@@ -652,6 +653,21 @@ def make_microduck_velocity_env_cfg(
+     cfg.commands["twist"] = microduck_mdp.VelocityCommandCommandOnlyCfg(**vars(command))
+     # Explicit turn-in-place bucket (see TURN_IN_PLACE_FRACTION above).
+     cfg.commands["twist"].rel_turn_in_place_envs = TURN_IN_PLACE_FRACTION
++    # Local tweak (my-microduck-journal): MICRODUCK_TURN=1 — the in-place turning dead zone (0.3 rad/s
++    # commanded -> 0, measured on our walk policy and upstream's) has two causes in this recipe: the
++    # turn-in-place bucket never samples |wz| below 40 % of the range, and the stock angular tracking
++    # term (std 0.71) makes standing still the optimum for small commands. Sample slow turns and add
++    # upstream's yaw-only fine term (track_yaw_rate_fine, std 0.35, weight 2.0) NEXT TO the stock term
++    # (replacing it lost turning upstream). VelStand inherits this block through its base cfg.
++    if os.environ.get("MICRODUCK_TURN"):
++        cfg.commands["twist"].rel_turn_in_place_envs = 0.25
++        cfg.commands["twist"].turn_in_place_min_frac = 0.1
++        cfg.rewards["track_yaw_fine"] = RewardTermCfg(
++            func=microduck_mdp.track_yaw_rate_fine,
++            weight=2.0,
++            params={"std": 0.35, "command_name": cfg.rewards["track_angular_velocity"].params["command_name"]},
++        )
++        print("[velocity] MICRODUCK_TURN: turn-in-place 25 % of envs from 10 % of the range, + track_yaw_fine (std 0.35, w 2.0)")
+ 
+     # Head pose command (4D deltas from HOME, in joint order:
+     #   neck_pitch, head_pitch, head_yaw, head_roll). Tracked as a primary
