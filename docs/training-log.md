@@ -407,6 +407,42 @@ Reading, and two corrections to earlier sections:
    with the battery's tracking trial, not the viewer; pipeline part 4 still uses the viewer sweep
    (it was launched before this), so its picks will be re-checked with the battery afterwards.
 
+## Official policies measured with the same battery (2026-10-11 21:30)
+
+Downloaded from the Hugging Face repo `pollen-robotics/microduck-policies` (main, 2026-10-11) into
+`pretrained/official/`; `manifest.json` says `velstand.onnx` is the deployed v7 (`j4i6yoq2` @ 1250,
+trained on `Mjlab-VelStand-Rough-Backlash-MicroDuck` at commit `53fb7d1`):
+
+| file | sha256 |
+|---|---|
+| `alpha_walking.onnx` | `e36332d383997d51401897734cd3e79cf5038406feddb18b4d57ecfb141daa6c` |
+| `alpha_stand.onnx` | `1569268713e40deea795dd2922dba50d3621e15a872855408b6b1b125b1c094b` |
+| `velstand.onnx` | `ce894d30b3343036d499bfac1102bdaa58d59a21c1b58401ecb70fb6a2f63e0a` |
+
+`eval_battery.py` takes ONNX files directly (CPU onnxruntime, one call per env); on our own
+`velstand_v2_5750.onnx` it reproduces the `.pt` numbers (0.30 → 0.18 m/s, ±1.0 rad/s → 0.93 /
+−1.00), so the comparison below is the same code path for both sides.
+
+**Walking policies**, `Mjlab-Velocity-Flat-MicroDuck`, 256 envs, seed 0, mean over the last 5 s of 8:
+
+| command | official `alpha_walking` (per-env \|yaw\| p50 / p90) | ours `first_walk_10000` (p50 / p90) |
+|---|---|---|
+| walk 0.15 m/s | 0.00 m/s (does not step) | 0.10 m/s |
+| walk 0.30 m/s | 0.15 m/s, drift 0.00 (0.04 / 0.10) | 0.20 m/s, drift −0.01 (0.06 / 0.17) |
+| walk 0.45 m/s | 0.21 m/s, drift −0.02 (0.04 / 0.11) | 0.27 m/s, drift −0.05 (0.08 / 0.23) |
+| turn +0.3 rad/s | 0.00 | 0.05 (0.00 / 0.26) |
+| turn +0.6 rad/s | 0.02 (0.00 / 0.00) | **0.57** (0.58 / 0.65) |
+| turn +1.0 / −1.0 rad/s | 0.35 / −0.17 | **1.00 / −1.00** |
+| falls | 0 % | 0 % |
+
+Reading: same recipe, 10 000 iterations here against 3 750 for the official checkpoint. The official
+walk has a speed dead zone at 0.15 m/s and the turning dead zone its authors describe (0.6 → 0.02,
+1.0 → 0.35, asymmetric); ours tracks turns from 0.6 rad/s up, symmetrically, and runs 30–50 % faster
+at the same command — though both are well under the commanded speed, which is the speed round's
+job. Our drift is slightly larger (p90 0.17–0.23 vs 0.10–0.11). Caveat: the official checkpoint was
+trained at an older commit, so the environment's domain randomisation may differ a little from what
+it saw. The `velstand.onnx` vs v2 table follows when the run finishes.
+
 ## Turning: where the bottleneck is, and what ours does (2026-10-11 15:20)
 
 Upstream's own notes (in the VelStand config and `docs/velstand_policy.md`) call the deployed policy
@@ -487,7 +523,7 @@ sweep → push tests and all three probes on the pick. Checkpoints are now chose
    actually track; then a protective-fall round (tuck the head, land softly) in the teacher.
 6. Turning round (pipeline part 4, queued): walk teacher v2 with the yaw fixes, sweep, VelStand v5 anchored to it.
 7. ~~Fixed-seed, batched evaluation battery~~ Done (first version; impact forces and ONNX input still to add) — the regression test for every later round.
-8. The official walk ONNX measured with the same probes (apples to apples).
+8. ~~The official walk ONNX measured with the same probes (apples to apples).~~ Done for the walk policies; `velstand.onnx` and `alpha_stand.onnx` next.
 9. GitHub Release per round: ONNX files + config + sha256.
 10. Speed round (walk teacher v3: fine linear-velocity term, more high-speed commands) and the
     protective-fall rewards (head impact), distilled together into VelStand v6, judged by separate metrics.

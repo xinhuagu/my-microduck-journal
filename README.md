@@ -38,7 +38,7 @@ What is different from the official setup:
 | | Official (upstream) | Here |
 |---|---|---|
 | Hardware | Linux workstations (COACH2, RTX 5090) | Windows 11 + WSL2 Ubuntu 24.04, RTX 5090 + Intel iGPU (hence the WSLg pitfalls) |
-| Walking policy | `alpha_walking` from wandb `441tzs6d` | `first-walk`, trained here from scratch, 4096 envs × 10 000 iterations |
+| Walking policy | `alpha_walking` from wandb `441tzs6d` (3 750 iterations) | `first-walk`, trained here from scratch, 4096 envs × 10 000 iterations — faster and turns in place where the official one does not (table below) |
 | Fall recovery | VelStand distilled from a **private** stand-up expert (`69u48n8l`) | own `StandUp` teacher (13 500 iterations) + VelStand with local checkpoints — v1 got back to standing height after every fall but into a 34° lean; v2 (teacher with command-independent upright rewards) gets up straight, 5/5 falls while walking in the 8-push smoke test |
 | Body-pose control | tilt from the shipped stand expert, crouch "not learned" | teacher rewards made command-relative, crouch taught by the own teacher (in progress) |
 | Tooling | wandb online, internal eval scripts | `WANDB_MODE=offline`, everything reproducible from this repo |
@@ -60,6 +60,27 @@ while the same GPU keeps training. Each duck starts an episode on the ground and
 | Fall recovery (`Mjlab-VelStand-*`) | ✅ trained | The official recipe distils a stand-up expert from a **private** wandb project (HTTP 403), so a `StandUp` teacher was trained here first (6 000 iterations, 2 h 30) and VelStand warm-started from the walk policy with local teachers (3 000 iterations, 1 h 35). 8-push smoke test (1 m/s, random direction, 6 s window): v1 went **down 1/8 standing, 5/8 walking** and was back above 100 mm trunk height **every time it went down** (the walk policy alone stays down 8/8) — but v1 "stands" pitched 34° forward with the head tucked (the teacher's lean basin). Recovery took 1–3 s in the posture probe. Not yet done: a fixed-seed battery per spawn type (face-down / face-up / side) with recovery time and final posture. Teacher v2 with stronger upright rewards (13 500 iterations in total) ends every get-up at pitch ≈ 0°. **VelStand v2** (6 000 iterations with that teacher): walking pushes down 5/8, back up 5/5 within ≈ 1 s **at pitch 1–3°**, standing pushes down 0/8. Checkpoint to use: `model_5750`, picked by a walk sweep (yaw drift 0.02 rad/s at 0.30 m/s; the last checkpoint, 5999, veers at 0.47 — see the turning section of the log). v3 continues it on rough terrain with actuator backlash (3 000 iterations; on flat: walking pushes down 6/8, up 6/6, pick `model_2500`) — see [docs/velstand-without-private-teachers.md](docs/velstand-without-private-teachers.md) and [docs/training-log.md](docs/training-log.md) |
 | Body-pose commands (crouch / tilt while standing) | 🔄 in progress | Measured first: neither the walk+get-up policy nor the teacher crouched, and tilt tracked only to ~10°. With the teacher's fixed-pose rewards made command-relative ([`patches/body-wide.patch`](patches/body-wide.patch)), **teacher v3 crouches 29 mm and tilts ±20° / rolls ±10° on command while still standing straight**; VelStand v4 is being distilled from it — see [docs/training-log.md](docs/training-log.md#body-pose-commands-what-the-policies-actually-do-with-them-2026-10-11-1405) |
 | Evaluation battery (256 envs, fixed seed) | ✅ first statistics | VelStand v2: get-up 93–99 % from face-down / face-up / on-side, median 0.3–0.7 s, straight at the end; push falls recovered 76–95 % (0.6–1.2 m/s); 0.30 m/s command → 0.18 m/s; in-place turn 0.3 / 0.6 / 1.0 rad/s → 0.02 / 0.46 / 0.91 — see [docs/training-log.md](docs/training-log.md#evaluation-battery-first-statistics-2026-10-11-2110) |
+
+## Measured against the official policies
+
+The official ONNX policies (Hugging Face `pollen-robotics/microduck-policies`) run through the same
+batched battery as ours: identical environment, 256 randomised ducks, seed 0, 8 s per command.
+Walking policies first (`Mjlab-Velocity-Flat-MicroDuck` environment):
+
+| command | official `alpha_walking` | ours `first_walk_10000` |
+|---|---|---|
+| walk 0.15 / 0.30 / 0.45 m/s → achieved | 0.00 / 0.15 / 0.21 m/s | **0.10 / 0.20 / 0.27 m/s** |
+| turn in place 0.3 / 0.6 / 1.0 / −1.0 rad/s → achieved | 0.00 / 0.02 / 0.35 / −0.17 | 0.05 / **0.57 / 1.00 / −1.00** |
+| falls during the trial | 0 % | 0 % |
+
+- Same recipe, more training: the walk recipe is unchanged here; ours ran 10 000 iterations against
+  the official checkpoint's 3 750. The official policy does not step at all for a 0.15 m/s command
+  and has the in-place turning dead zone its own notes describe; ours tracks 0.6 rad/s and above,
+  symmetrically. Both under-track speed (0.30 → 0.20 / 0.15) and both ignore 0.3 rad/s.
+- Caveat: the official checkpoint comes from an older commit of the recipe, so the environment's
+  randomisation may differ slightly from what it was trained in.
+- The walk + get-up policies (`velstand.onnx` vs our v2) and the body-pose teachers are measured the
+  same way — see [docs/training-log.md](docs/training-log.md#official-policies-measured-with-the-same-battery-2026-10-11-2130).
 
 ## Hardware & software
 
