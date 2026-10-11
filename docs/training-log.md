@@ -16,7 +16,8 @@ iterations (24 env-steps each). Checkpoints every 250 iterations.
 | 2026-10-11 07:59 → 08:35 | **`microduck_stand` v2** (stand straight) | `Mjlab-StandUp-Flat-MicroDuck` + `MICRODUCK_STANDUP_STRAIGHT=1` | 4096 | 1 500 | 36 min, warm start from `model_5999.pt` | **ends upright** — posture probe after pushes: mean \|pitch\| 0.2° (v1: 34°), neck back at 0°; `upright_sharp` reward 0.10 → 4.75 of 5, mean reward 4 → 89. Fix: upright_sharp 5.0 (curriculum pinned), composite upright_std 0.25, head_pose_tracking 2.0 / fine_std 0.15 |
 | 2026-10-11 08:37 → 11:02 | **`microduck_stand` v2** (continued) | same | 4096 | +6 000 (→ 7 498) | 2 h 26 min, resume from `model_1499.pt` | **final teacher** `model_7498.pt`, total budget 6 000 + 1 500 + 6 000 = 13 500 iterations. Probe: stands at pitch 0.6° throughout, neither probe push takes it down; push test: went down 1/8 (to 46 mm, back up), upright at end **8/8** |
 | 2026-10-11 11:04 → 14:32 | **`velstand` v2** (walk + get-up) | `Mjlab-VelStand-Flat-MicroDuck` | 4096 | 6 000 | 1 h 30 + 1 h 50 (the PC went to sleep at iteration 2 784; resumed from `model_2750.pt` at 12:42, curricula continued) | warm start from `first-walk/model_10000.pt`, expert = teacher v2 `model_7498.pt`. **Gets up straight**: walking pushes down 5/8, back up 5/5 within ≈ 1 s at pitch 1–3°; standing pushes down 0/8. `recovery_success` 0.018 (v1: 0.003). Lost the tilt tracking v1 had (10° → 3.6°) — see the body-pose section |
-| 2026-10-11 14:35 → | **`velstand` v3** (rough + backlash) | `Mjlab-VelStand-Rough-Backlash-MicroDuck` | 4096 | 3 000, **running** | warm start from v2 `model_5999.pt`, same teachers | rough terrain and actuator backlash on top of v2 |
+| 2026-10-11 14:35 → 17:50 | **`velstand` v3** (rough + backlash) | `Mjlab-VelStand-Rough-Backlash-MicroDuck` | 4096 | 3 000 | **3 h 15 min**, 3.7 s/iteration (2.2× the flat task) | warm start from v2 `model_5999.pt`, same teachers. On the flat test scene: standing pushes down 2/8, walking (0.14 m/s) down 6/8, upright 8/8 both, get-ups straight (pitch 1–2°). Sweep → **use `model_2500`** (drift −0.01; 2999 −0.16). `recovery_success` 0.019 |
+| 2026-10-11 17:53 → | **`microduck_stand` v3** (body-wide) | `Mjlab-StandUp-Flat-MicroDuck` + `MICRODUCK_STANDUP_STRAIGHT=1` + `MICRODUCK_BODY_WIDE=1` | 4096 | 3 000, **running** | warm start from `model_7498.pt` | pipeline part 3: command-relative stand rewards, crouch −40 mm, tilt ±20°; VelStand v4 follows |
 
 ## `microduck_stand` — iteration 500 check (2026-10-11 00:12)
 
@@ -243,6 +244,27 @@ What v2 lost: the body-pose probe gives pitch 10° → 3.6° (v1: 9.2°), 20° �
 for. Cost of the recovery skill on walking is unchanged from v1: 0.16 m/s achieved at a 0.30 m/s
 command (walk policy alone: 0.18).
 
+## `velstand` v3 — rough terrain + backlash (2026-10-11 18:00)
+
+Same recipe as v2, continued for 3 000 iterations on `Mjlab-VelStand-Rough-Backlash-MicroDuck`
+(randomised terrain, actuator backlash) from `v2/model_5999.pt`. The rough task costs 3.7 s per
+iteration against 1.7 on flat, so 3 000 iterations took 3 h 15 min. Tests are on the flat viewer
+scene (the viewer has no rough terrain), so they say "nothing was lost on flat", not "works on rough":
+
+| mode | pushes that moved it | went below 90 mm | upright 6 s later |
+|---|---|---|---|
+| standing | 6/8 | 2/8 | 8/8 |
+| walking at 0.30 m/s (achieved 0.14) | 7/8 | 6/8 | 8/8 |
+
+Posture probe (standing, 3 pushes): the one push that took it down to 93 mm ended at pitch 1.2°
+two seconds later, neck −6°. Standing pitch is 1.2–1.6° (v2: 0.3°), a trace of the backlash
+training. Body-pose commands: as v2 (crouch −30 mm → −1.5 mm, pitch 10° → 4.6°).
+
+Sweep (`turn_sweep.sh`, yaw drift at 0.30 m/s / in-place 0.6 rad/s): 1500 −0.18 / 0, 1750 −0.05 / 0,
+2000 −0.20 / 0, 2250 −0.04 / 0, **2500 −0.01 / 0.01**, 2750 +0.05 / 0, 2999 −0.16 / 0. So `model_2500`
+is the v3 checkpoint to use. (Pipeline part 3 warm-starts v4 from the last checkpoint, 2999; drift
+re-rolls with every training anyway and v4 gets its own sweep in part 4.)
+
 ## Body-pose commands: what the policies actually do with them (2026-10-11 14:05)
 
 The 13-D command vector has six body-pose slots (x, y, z, roll, pitch, yaw); the viewer drives
@@ -368,7 +390,7 @@ sweep → push tests and all three probes on the pick. Checkpoints are now chose
 1. ~~StandUp v2 → posture probe: does it end at pitch ≈ 0° after a push?~~ Yes (0.2°).
 2. ~~Teacher v2 continued to 7 498 → probe + push test.~~ Done: upright 8/8, down only 1/8.
 3. ~~VelStand v2 (Flat, 6 000) with the new teacher; posture probe + push tests; compare with v1.~~ Done: stands up straight.
-4. VelStand v3 (Rough-Backlash, 3 000, running) warm-started from v2; push tests.
+4. ~~VelStand v3 (Rough-Backlash, 3 000) warm-started from v2; push tests.~~ Done, pick 2500.
 5. Body-pose round (pipeline part 3, queued): teacher v3 + VelStand v4 with crouch / tilt that
    actually track; then a protective-fall round (tuck the head, land softly) in the teacher.
 6. Turning round (pipeline part 4, queued): walk teacher v2 with the yaw fixes, sweep, VelStand v5 anchored to it.
