@@ -55,7 +55,9 @@ wsl -d Ubuntu-24.04 -u root -- mkdir -p /mnt/shared_memory
 wsl --system -u root -- sh -c 'kill $(pidof weston)'
 ```
 
-Relaunch the viewer afterwards (every GUI window dies with Weston). Check with
+Scripted, with verification: [`scripts/wslg_copymode.ps1`](../scripts/wslg_copymode.ps1) `-Check`
+(read-only diagnosis, exit 1 = copy mode) and `-Fix` (the steps above, then confirms the new Weston
+did not log the failure). Relaunch the viewer afterwards (every GUI window dies with Weston). Check with
 `wsl --system -- mount | grep shared_memory` (must say `virtiofs`) and the window title, which
 loses the `[WARN:COPY MODE]` prefix.
 
