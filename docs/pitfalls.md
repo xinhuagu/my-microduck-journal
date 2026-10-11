@@ -33,16 +33,35 @@ Fallback that always works (software rendering, fine for a single duck): just om
 **Symptom.** The MuJoCo window is listed by Windows (visible, not minimised), but clicking it shows
 nothing. The window title is `[WARN:COPY MODE] MuJoCo : scene (Ubuntu-24.04)`.
 
-**Cause.** WSLg's RDP-based compositor fell into "copy mode" and stopped delivering frames. It
-happened twice: once on a fresh launch, once right after the GPU had been busy with 41 ONNX exports.
+**Cause.** Not the GPU. WSLg's compositor (Weston, in the hidden system distro) shares window
+pixels with Windows through a virtiofs mount at `/mnt/shared_memory`. On this machine that mount
+was missing after every Windows boot, so Weston logged
 
-**Fix.** Restart WSL entirely, then relaunch:
-
-```powershell
-wsl --shutdown
+```
+rdp_allocate_shared_memory: Failed to open "/mnt/shared_memory/{...}" with error: Input/output error
 ```
 
-The first graphical window after a WSL restart has always rendered correctly here.
+at start-up (`/mnt/wslg/weston.log`) and fell back to "copy mode" (RDP bitmap copies), in which
+GPU-rendered windows stay blank. Restarting the Windows-side RDP client (`msrdc.exe`) does not
+help: the allocation is only attempted when Weston starts. Known upstream bug:
+[microsoft/WSL#40618](https://github.com/microsoft/WSL/issues/40618) (WSL 2.7.x; seen here on
+2.7.13 / WSLg 1.0.73).
+
+**Fix without restarting WSL** (training keeps running). Create the mount point in the distro — WSL
+then mounts the virtiofs share itself — and restart only Weston; WSLGd respawns it:
+
+```powershell
+wsl -d Ubuntu-24.04 -u root -- mkdir -p /mnt/shared_memory
+wsl --system -u root -- sh -c 'kill $(pidof weston)'
+```
+
+Relaunch the viewer afterwards (every GUI window dies with Weston). Check with
+`wsl --system -- mount | grep shared_memory` (must say `virtiofs`) and the window title, which
+loses the `[WARN:COPY MODE]` prefix.
+
+**Durable fix.** The `mkdir` persists on the distro's disk; after it, the next `wsl --shutdown` or
+Windows reboot comes up in the fast path directly. Before that was known, the only fix was
+`wsl --shutdown`, which also kills any training running in the distro.
 
 ### Arrow keys do nothing in the viewer
 
