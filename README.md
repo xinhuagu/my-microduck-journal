@@ -79,8 +79,25 @@ Walking policies first (`Mjlab-Velocity-Flat-MicroDuck` environment):
   symmetrically. Both under-track speed (0.30 → 0.20 / 0.15) and both ignore 0.3 rad/s.
 - Caveat: the official checkpoint comes from an older commit of the recipe, so the environment's
   randomisation may differ slightly from what it was trained in.
-- The walk + get-up policies (`velstand.onnx` vs our v2) and the body-pose teachers are measured the
-  same way — see [docs/training-log.md](docs/training-log.md#official-policies-measured-with-the-same-battery-2026-10-11-2130).
+
+Walk + get-up policies (`Mjlab-VelStand-Flat-MicroDuck` environment; the official file is their
+deployed v7, ours is v2 `model_5750`):
+
+| | official `velstand.onnx` | ours `velstand v2` |
+|---|---|---|
+| get-up from face-down / face-up / on-side | 100 / 93 / 95 %, median 0.36 / 0.72 / 0.74 s | 99 / 93 / 93 %, median 0.32 / 0.62 / 0.66 s |
+| recovered after a 1.0 / 1.2 m/s push, standing | **92 / 92 %** | 87 / 76 % |
+| recovered after a 1.0 / 1.2 m/s push, walking | **94 / 93 %** | 84 / 86 % |
+| walk 0.15 / 0.30 / 0.45 m/s → achieved | 0.02 / 0.14 / 0.22 m/s | **0.09 / 0.18 / 0.25 m/s** |
+| turn in place 0.3 / 0.6 / 1.0 / −1.0 rad/s → achieved | 0.00 / 0.05 / 0.39 / −0.34 | 0.02 / **0.46 / 0.91 / −1.00** |
+| body tilt command ±10° → achieved | **+9.9 / −6.2°** pitch, ±7.8° roll | +3.7 / −2.5° pitch, ±1.6° roll |
+| crouch −30 mm → achieved | −0.6 mm | −0.4 mm |
+
+So, measured the same way: equal at getting up, the official policy recovers more push falls
+(5–16 points) and tilts on command, ours walks faster and turns where theirs does not; neither
+crouches. The next versions target exactly the two gaps (v4: body commands from the own teacher,
+which crouches; the push-recovery margin goes to the protective-fall round). Full tables with
+per-env spread: [docs/training-log.md](docs/training-log.md#official-policies-measured-with-the-same-battery-2026-10-11-2130).
 
 ## Hardware & software
 

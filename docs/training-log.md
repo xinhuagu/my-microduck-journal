@@ -441,7 +441,37 @@ walk has a speed dead zone at 0.15 m/s and the turning dead zone its authors des
 at the same command — though both are well under the commanded speed, which is the speed round's
 job. Our drift is slightly larger (p90 0.17–0.23 vs 0.10–0.11). Caveat: the official checkpoint was
 trained at an older commit, so the environment's domain randomisation may differ a little from what
-it saw. The `velstand.onnx` vs v2 table follows when the run finishes.
+it saw.
+
+**Walk + get-up policies**, `Mjlab-VelStand-Flat-MicroDuck`, 256 envs, seed 0 — official `velstand.onnx`
+(deployed v7, `j4i6yoq2` @ 1250, trained on Rough-Backlash) against our v2 `model_5750` (Flat):
+
+| | official v7 | ours v2 `5750` |
+|---|---|---|
+| get-up face-down: recovered, median, p90 | 100 %, 0.36 s, 0.54 s | 99 %, 0.32 s, 0.75 s |
+| get-up face-up | 93 %, 0.72 s, 0.94 s | 93 %, 0.62 s, 0.84 s |
+| get-up on side | 95 %, 0.74 s, 1.16 s | 93 %, 0.66 s, 1.04 s |
+| push 1.0 m/s standing: fell / recovered of fallen / median | 98 % / **92 %** / 1.16 s | 93 % / 87 % / 1.06 s |
+| push 1.2 m/s standing | 100 % / **92 %** / 1.18 s | 100 % / 76 % / 1.04 s |
+| push 1.0 m/s walking | 94 % / **94 %** / 1.06 s | 95 % / 84 % / 1.06 s |
+| push 1.2 m/s walking | 95 % / **93 %** / 1.08 s | 97 % / 86 % / 1.12 s |
+| walk 0.15 / 0.30 / 0.45 m/s | 0.02 / 0.14 / 0.22 m/s | **0.09 / 0.18 / 0.25** m/s |
+| yaw drift at 0.30 / 0.45 (per-env p90) | +0.05 / −0.03 (0.15 / 0.17) | −0.04 / −0.04 (0.17 / 0.19) |
+| turn +0.3 / +0.6 / +1.0 / −1.0 rad/s | 0.00 / 0.05 / 0.39 / −0.34 | 0.02 / **0.46 / 0.91 / −1.00** |
+| crouch −30 mm / raise +20 mm | −0.6 / +0.3 mm | −0.4 / +1.1 mm |
+| roll +10 / −10° | **+7.8 / −7.9°** | +1.9 / −1.3° |
+| pitch +10 / −10 / +20 / −20° | **+9.9 / −6.2 / +16.9 / −15.4°** | +3.7 / −2.5 / +4.2 / −2.0° |
+
+Reading: get-ups are a tie (ours a little faster, theirs a little more reliable on the side spawn);
+the official policy recovers clearly more push falls — 92–94 % against our 76–87 %, the biggest
+gap at 1.2 m/s standing — and it tracks body tilt (it is distilled from `alpha_stand`, and even
+extrapolates to ±20° beyond its ±12° training range), which v2 does not; ours walks faster at every
+command and turns at 0.6 rad/s and above where theirs barely moves. Neither crouches. The official
+push-recovery numbers here (92–94 %) are close to the 93–95 % in their own notes, which says the
+battery is measuring the same thing they measured. Two gaps to close, in the order already planned:
+body commands (v4, from a teacher that crouches) and push recovery (the protective-fall round, where
+"recovered of fallen at 1.2 m/s standing" is the number to move from 76 % toward 92 %).
+
 
 ## Turning: where the bottleneck is, and what ours does (2026-10-11 15:20)
 
@@ -523,7 +553,7 @@ sweep → push tests and all three probes on the pick. Checkpoints are now chose
    actually track; then a protective-fall round (tuck the head, land softly) in the teacher.
 6. Turning round (pipeline part 4, queued): walk teacher v2 with the yaw fixes, sweep, VelStand v5 anchored to it.
 7. ~~Fixed-seed, batched evaluation battery~~ Done (first version; impact forces and ONNX input still to add) — the regression test for every later round.
-8. ~~The official walk ONNX measured with the same probes (apples to apples).~~ Done for the walk policies; `velstand.onnx` and `alpha_stand.onnx` next.
+8. ~~The official walk ONNX measured with the same probes (apples to apples).~~ Done for the walk and the walk+get-up policies; `alpha_stand.onnx` vs teacher v3 next.
 9. GitHub Release per round: ONNX files + config + sha256.
 10. Speed round (walk teacher v3: fine linear-velocity term, more high-speed commands) and the
     protective-fall rewards (head impact), distilled together into VelStand v6, judged by separate metrics.
