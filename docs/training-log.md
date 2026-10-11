@@ -13,7 +13,8 @@ iterations (24 env-steps each). Checkpoints every 250 iterations.
 | 2026-10-10 | smoke | `Mjlab-VelStand-Flat-MicroDuck` | 64 | — | 14 s | **failed**: wandb 403 on the private teacher checkpoints |
 | 2026-10-10 23:57 → 10-11 02:28 | **`microduck_stand`** (stand-up teacher) | `Mjlab-StandUp-Flat-MicroDuck` | 4096 | 6 000 (last checkpoint `model_5999.pt`) | **2 h 30 min**, 1.42–1.5 s/iteration, 25 checkpoints | push test below: 4500 and 5999 get up 8/8, 3000 sits 8/8 |
 | 2026-10-11 02:41 → 04:16 | **`velstand`** (walk + get-up) | `Mjlab-VelStand-Flat-MicroDuck` | 4096 | 3 000 (last checkpoint `model_2999.pt`) | **1 h 35 min**, 1.70 s/iteration, 13 checkpoints | warm start from `first-walk/model_10000.pt`, expert `microduck_stand/model_5999.pt`, anchor `model_10000.pt`; **gets up 8/8 standing and 8/8 walking** — push tests below |
-| 2026-10-11 07:59 → | **`microduck_stand` v2** (stand straight) | `Mjlab-StandUp-Flat-MicroDuck` + `MICRODUCK_STANDUP_STRAIGHT=1` | 4096 | 1 500 max, **running** | warm start from `model_5999.pt` | fixes the lean basin below: upright_sharp 5.0 (curriculum pinned), composite upright_std 0.25, head_pose_tracking 2.0 / fine_std 0.15 |
+| 2026-10-11 07:59 → 08:35 | **`microduck_stand` v2** (stand straight) | `Mjlab-StandUp-Flat-MicroDuck` + `MICRODUCK_STANDUP_STRAIGHT=1` | 4096 | 1 500 | 36 min, warm start from `model_5999.pt` | **ends upright** — posture probe after pushes: mean \|pitch\| 0.2° (v1: 34°), neck back at 0°; `upright_sharp` reward 0.10 → 4.75 of 5, mean reward 4 → 89. Fix: upright_sharp 5.0 (curriculum pinned), composite upright_std 0.25, head_pose_tracking 2.0 / fine_std 0.15 |
+| 2026-10-11 08:37 → | **`microduck_stand` v2** (continued) | same | 4096 | +6 000 (→ 7 499), **running** | resume from `model_1499.pt` | total teacher budget 6 000 + 1 500 + 6 000 = 13 500 iterations; then VelStand v2 (Flat, 6 000) and v3 (Rough-Backlash, 3 000) follow automatically |
 
 ## `microduck_stand` — iteration 500 check (2026-10-11 00:12)
 
@@ -144,10 +145,43 @@ Fix (teacher side, [`patches/standup-stand-straight.patch`](../patches/standup-s
 enabled with `MICRODUCK_STANDUP_STRAIGHT=1`): `upright_sharp` weight 5.0 with std 0.2 and the fade
 curriculum pinned at 5.0; `standing_composite` upright_std 0.25; `head_pose_tracking` weight 2.0 with
 `fine_std` 0.15. Fine-tune from `model_5999.pt` with `MICRODUCK_WARM_START=1`, 1 500 iterations.
-Then VelStand gets re-trained with the new teacher. Results below when they are in.
+Then VelStand gets re-trained with the new teacher.
+
+### Result: teacher v2 stands straight (2026-10-11 08:37)
+
+1 500 iterations, 36 minutes. Same probe as above on `standup_v2_1499.onnx`, two pushes, one row
+per second (50 control steps):
+
+| step | phase | z (m) | pitch | roll | neck_pitch | note |
+|---|---|---|---|---|---|---|
+| 650 | before | 0.116 | 0.3° | −0.2° | −0.1° | standing, joints ≈ default |
+| 700 | push 1 | 0.089 | 32.6° | 22.4° | −54.5° | going down |
+| 750 | push 1 | 0.088 | 70.4° | 82.5° | −112.7° | on the ground |
+| 800 | push 1 | 0.116 | **0.7°** | 0.0° | −11.6° | back up after ≈ 1 s |
+| 850 | push 1 | 0.116 | −0.1° | −0.1° | −0.7° | neck straight |
+| 1050 | push 2 | 0.064 | 40.0° | 67.8° | −51.4° | down, lower than any v1 spawn |
+| 1100 | push 2 | 0.100 | 43.6° | 6.1° | −110.5° | *the old lean pose — now a transit state* |
+| 1150 | push 2 | 0.106 | 14.9° | 1.2° | −106.1° | straightening |
+| 1200 | push 2 | 0.118 | −0.1° | −3.6° | −55.0° | upright, head coming up |
+| 1250 | push 2 | 0.116 | **−0.2°** | 0.0° | −0.5° | standing straight |
+
+Mean |pitch| over the last four rows: **0.2°** (v1 teacher: 34°). The lean pose still shows up on
+the way up (step 1100: pitch 44°, neck at its −110° limit), but it no longer pays enough to stay
+in — with `upright_sharp` at weight 5 / std 0.2 the policy keeps pushing to vertical and lifts the
+head. Reward terms over the fine-tune: `upright_sharp` 0.10 → 4.75 (of a possible 5),
+`head_pose_tracking` 0.06 → 1.84, mean reward 4.1 → 88.9, episode length 21 → 300 (the first
+iteration is low because the warm start resets the curricula and the terminations).
+
+What happens next is scripted (one shell script, logged to `logs/pipeline.log`): continue this
+teacher for another 6 000 iterations (the stock teacher in the upstream lineage was trained for
+≈ 10 000; this one ends at 13 500 in total), probe + push test, then **VelStand v2** on Flat for
+6 000 iterations (warm start from `first-walk/model_10000.pt`, expert = teacher v2, anchor = walk),
+push tests, then **VelStand v3** on `Rough-Backlash` for 3 000 iterations warm-started from v2.
 
 ## Next
 
-1. StandUp v2 (running) → posture probe: does it end at pitch ≈ 0° after a push?
-2. VelStand v2 with the new teacher; posture probe + push tests; compare with v1.
-3. Walk sweep, per-spawn-type get-up battery, README get-up sequence, Hub publish.
+1. ~~StandUp v2 → posture probe: does it end at pitch ≈ 0° after a push?~~ Yes (0.2°).
+2. Teacher v2 continued to 7 499 (running) → probe + push test.
+3. VelStand v2 (Flat, 6 000) with the new teacher; posture probe + push tests; compare with v1.
+4. VelStand v3 (Rough-Backlash, 3 000) warm-started from v2; push tests.
+5. Walk sweep, per-spawn-type get-up battery, README get-up sequence, Hub publish.
