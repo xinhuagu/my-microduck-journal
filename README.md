@@ -93,9 +93,19 @@ deployed v7, ours is v2 `model_5750`):
 | body tilt command ±10° → achieved | **+9.9 / −6.2°** pitch, ±7.8° roll | +3.7 / −2.5° pitch, ±1.6° roll |
 | crouch −30 mm → achieved | −0.6 mm | −0.4 mm |
 
+Stand-up teachers (`Mjlab-StandUp-Flat-MicroDuck` environment; these are the policies the walk +
+get-up networks are distilled from):
+
+| | official `alpha_stand` | ours teacher v3 |
+|---|---|---|
+| get-up from face-down / face-up / on-side | 100 / 100 / 100 %, median 0.38 / 0.50 / 0.54 s | 100 / 100 / 100 %, median **0.28 / 0.44 / 0.50 s** |
+| body tilt ±10° / ±20° → achieved | ±9.2° roll, +9.5 / −9.1°, +18.4 / −18.6° pitch | ±9.5° roll, +10.0 / −8.9°, +19.7 / −19.4° pitch |
+| crouch −30 mm / raise +20 mm → achieved | +0.5 / +1.8 mm (none) | **−28.2 / +12.4 mm** |
+
 So, measured the same way: equal at getting up, the official policy recovers more push falls
-(5–16 points) and tilts on command, ours walks faster and turns where theirs does not; neither
-crouches. The next versions target exactly the two gaps (v4: body commands from the own teacher,
+(5–16 points) and tilts on command, ours walks faster and turns where theirs does not; v2 does
+not crouch and neither does any official policy, while our stand-up teacher v3 does — which is what
+v4 is distilled from. The next versions target exactly the two gaps (v4: body commands from the own teacher,
 which crouches; the push-recovery margin goes to the protective-fall round). Full tables with
 per-env spread: [docs/training-log.md](docs/training-log.md#official-policies-measured-with-the-same-battery-2026-10-11-2130).
 

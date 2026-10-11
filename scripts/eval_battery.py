@@ -367,7 +367,8 @@ def trial_body(duck: Duck, seconds: float = 5.0):
             "dz_mm": float(((tr["z"][last].mean(0) - base) * 1000).median()),
             "roll_deg": float(tr["roll"][last].mean(0).median()),
             "pitch_deg": float(tr["pitch"][last].mean(0).median()),
-            "fell": float((tr["z"] < DOWN_Z).any(0).float().mean()),
+            # a commanded crouch legitimately goes below the 90 mm height threshold: judge falls by tilt here
+            "fell": float((tr["tilt"] > 45.0).any(0).float().mean()),
         })
     return rows
 

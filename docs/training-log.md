@@ -472,6 +472,26 @@ battery is measuring the same thing they measured. Two gaps to close, in the ord
 body commands (v4, from a teacher that crouches) and push recovery (the protective-fall round, where
 "recovered of fallen at 1.2 m/s standing" is the number to move from 76 % toward 92 %).
 
+**Stand-up teachers**, `Mjlab-StandUp-Flat-MicroDuck`, 256 envs, seed 0 — official `alpha_stand.onnx`
+against our teacher v3 `model_2999.pt`:
+
+| | official `alpha_stand` | ours teacher v3 |
+|---|---|---|
+| get-up face-down: recovered, median, p90 | 100 %, 0.38 s, 0.76 s | 100 %, **0.28 s, 0.38 s** |
+| get-up face-up | 100 %, 0.50 s, 0.66 s | 100 %, **0.44 s, 0.56 s** |
+| get-up on side | 100 %, 0.54 s, 0.90 s | 100 %, **0.50 s, 0.66 s** |
+| end pitch | 0.3° | 0.6° |
+| crouch −30 mm / raise +20 mm | +0.5 / +1.8 mm | **−28.2 / +12.4 mm** |
+| roll +10 / −10° | +9.2 / −9.0° | +9.6 / −9.3° |
+| pitch +10 / −10 / +20 / −20° | +9.5 / −9.1 / +18.4 / −18.6° | +10.0 / −8.9 / +19.7 / −19.4° |
+
+Reading: as teachers the two are equivalent on getting up (ours a third faster, p90 under 0.7 s
+everywhere) and on tilt (both track ±20°); the difference is the crouch, which the official teacher
+does not do at all and ours does to within 2 mm — the command-relative stand rewards from
+[`patches/body-wide.patch`](../patches/body-wide.patch) are the only change behind that. The battery's
+body trial had flagged the crouch case as "fell 100 %" because a 28 mm crouch takes the trunk below
+the 90 mm height threshold; the body trial now judges falls by tilt instead (fixed in the script).
+
 
 ## Turning: where the bottleneck is, and what ours does (2026-10-11 15:20)
 
@@ -553,7 +573,7 @@ sweep → push tests and all three probes on the pick. Checkpoints are now chose
    actually track; then a protective-fall round (tuck the head, land softly) in the teacher.
 6. Turning round (pipeline part 4, queued): walk teacher v2 with the yaw fixes, sweep, VelStand v5 anchored to it.
 7. ~~Fixed-seed, batched evaluation battery~~ Done (first version; impact forces and ONNX input still to add) — the regression test for every later round.
-8. ~~The official walk ONNX measured with the same probes (apples to apples).~~ Done for the walk and the walk+get-up policies; `alpha_stand.onnx` vs teacher v3 next.
+8. ~~The official policies measured with the same battery.~~ Done: walk, walk+get-up and stand-up teachers, all in the README.
 9. GitHub Release per round: ONNX files + config + sha256.
 10. Speed round (walk teacher v3: fine linear-velocity term, more high-speed commands) and the
     protective-fall rewards (head impact), distilled together into VelStand v6, judged by separate metrics.
