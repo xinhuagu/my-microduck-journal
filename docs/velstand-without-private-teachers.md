@@ -1,7 +1,7 @@
 # Fall recovery (VelStand) without Pollen's private teachers
 
-**Status: teacher training in progress (2026-10-11).** Plumbing for the VelStand stage is done and
-smoke-tested; results will be appended as they come in.
+**Status: VelStand training started 2026-10-11 ~02:50** with the self-trained teacher
+`microduck_stand/model_5999.pt` (gets up 8/8 in the push test) and `first-walk/model_10000.pt` as warm start + anchor.
 
 ## The problem
 
