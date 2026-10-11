@@ -294,6 +294,65 @@ iterations, warm start from `model_7498.pt`), posture probe (must still stand st
 probe, then VelStand v4 (3 000 iterations on the v3 task, expert = teacher v3), push tests +
 probes. Protective fall is a separate later round.
 
+## Turning: where the bottleneck is, and what ours does (2026-10-11 15:20)
+
+Upstream's own notes (in the VelStand config and `docs/velstand_policy.md`) call the deployed policy
+"still very bad at turning": in place, 0.3 / 0.6 rad/s commands give ≈ 0, 1.0 gives 0.45. Their
+diagnosis, which the numbers below confirm for our policies too:
+
+1. **The reward makes small turns not worth it.** `track_angular_velocity` uses std √0.5 ≈ 0.71 rad/s,
+   so ignoring a 0.3 rad/s command costs only 16 % of that term, while stepping costs smoothness,
+   foot and effort penalties. Their counterfactual scoring showed standing still *is* the reward
+   optimum at 0.3 rad/s and turning wins by only 4 % at 0.6.
+2. **Slow in-place turns are never sampled.** The turn-in-place bucket draws |ω_z| from 40 % of the
+   range upward (`turn_in_place_min_frac = 0.4`), so nothing below 0.4 rad/s is trained in place.
+3. **The yaw error is noisy.** mjlab's term uses the full body-frame z rate, which during stepping
+   carries roll/pitch coupling, so a small commanded yaw is buried.
+4. **VelStand copies the walk teacher's dead zone.** The walk anchor (behaviour cloning on upright
+   frames) is the floor; both of their attempts to sharpen the yaw reward *and* take turn frames off
+   the anchor lost turning within 250 iterations, so they ship a runtime command remap instead
+   (fed = sign(c)·(0.33 + |c|/0.6)).
+5. **Yaw drift is a checkpoint lottery.** Their checkpoint 500 turns right when asked to walk straight
+   (−0.20 rad/s), 1499 turns left (+0.27), 1250 neither — "always run the walk sweep".
+
+Ours, measured in the viewer with `scripts/turn_probe.sh` (initial command via `--ang-vel-z` /
+`--lin-vel-x`, body-frame yaw rate from the `--debug` gyro line, mean over the last 6 s of 12):
+
+| command | upstream v7 `j4i6yoq2@1250` | our walk `first_walk_10000` | our `velstand_v2_5999` |
+|---|---|---|---|
+| turn in place +0.3 rad/s | 0.00 | 0.00 | 0.00 |
+| turn in place +0.6 rad/s | 0.07 | **+0.70** | 0.03 |
+| turn in place +1.0 / −1.0 rad/s | 0.45 / −0.37 | **+0.83 / −1.00** | +1.24 / −0.79 |
+| straight walk 0.30 m/s: speed, yaw drift | 0.35 m/s, 0.05 rad/s | 0.19 m/s, −0.05 | 0.17 m/s, **+0.47** |
+| straight walk 0.45 m/s: speed, yaw drift | (0.4 m/s: 0.03) | 0.27 m/s, −0.17 | 0.27 m/s, +0.24 |
+
+Two things stand out. Our walk teacher turns better than upstream's walk policy at 0.6 and 1.0
+rad/s (it was trained 10 000 iterations against their ≈ 3 750), but has the same dead zone at 0.3.
+And VelStand v2's *last* checkpoint lost the 0.6 turn and walks in a left-hand circle at 0.30 m/s
+(+0.47 rad/s ≈ 27°/s): the push tests above were done while it was veering. The sweep over the
+last five checkpoints (`scripts/turn_sweep.sh`):
+
+| v2 checkpoint | yaw drift at 0.30 m/s | turn in place 0.6 rad/s |
+|---|---|---|
+| 5000 | +0.09 | 0.00 |
+| 5250 | −0.34 | 0.00 |
+| 5500 | −0.11 | −0.01 |
+| **5750** | **+0.02** | 0.00 |
+| 5999 | +0.47 | 0.03 |
+
+Same lottery as upstream's. So: **`model_5750` is the v2 checkpoint to use**, and the sweep becomes a
+fixed step after every VelStand run instead of "take the last checkpoint". The 0.6 rad/s dead zone,
+however, is in every v2 checkpoint — the anchor to a teacher that *can* turn at 0.6 did not carry it
+over, which says the in-place turn frames are too rare in VelStand's command mix to matter.
+
+Plan for turning, in order of leverage: the dead zone starts in the walk teacher, and ours is our
+own, so fix it there (Velocity task, warm start from `first_walk_10000`): an additive yaw-only fine
+term (std 0.35, weight 2 — additive, not a replacement, which is the variant that lost turning
+upstream), `turn_in_place_min_frac` 0.4 → 0.1 so slow turns are sampled, and a sweep over every
+250-iteration checkpoint for drift. Then VelStand warm-started from and anchored to that teacher
+inherits the turning, with the in-place fraction raised so the anchor actually sees those frames.
+Numbers to beat: 0.3 / 0.6 / 1.0 rad/s in place, drift < 0.05 rad/s at 0.30 and 0.45 m/s.
+
 ## Next
 
 1. ~~StandUp v2 → posture probe: does it end at pitch ≈ 0° after a push?~~ Yes (0.2°).
@@ -302,4 +361,5 @@ probes. Protective fall is a separate later round.
 4. VelStand v3 (Rough-Backlash, 3 000, running) warm-started from v2; push tests.
 5. Body-pose round (pipeline part 3, queued): teacher v3 + VelStand v4 with crouch / tilt that
    actually track; then a protective-fall round (tuck the head, land softly) in the teacher.
-6. Walk sweep, per-spawn-type get-up battery, README get-up sequence, Hub publish.
+6. Turning round: walk teacher v2 with the yaw fixes above, sweep, then VelStand anchored to it.
+7. Per-spawn-type get-up battery (fixed seed, batched), README get-up sequence, release of the ONNX files.
