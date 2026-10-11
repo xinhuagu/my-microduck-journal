@@ -170,8 +170,13 @@ Mean |pitch| over the last four rows: **0.2°** (v1 teacher: 34°). The lean pos
 the way up (step 1100: pitch 44°, neck at its −110° limit), but it no longer pays enough to stay
 in — with `upright_sharp` at weight 5 / std 0.2 the policy keeps pushing to vertical and lifts the
 head. Reward terms over the fine-tune: `upright_sharp` 0.10 → 4.75 (of a possible 5),
-`head_pose_tracking` 0.06 → 1.84, mean reward 4.1 → 88.9, episode length 21 → 300 (the first
-iteration is low because the warm start resets the curricula and the terminations).
+`head_pose_tracking` 0.06 → 1.84, mean reward 4.1 → 88.9, episode length 21 → 300. Read these as
+convergence of *this* run only: the first iteration is low because the warm start resets the
+curricula and the terminations, and the reward *definition* changed (weights 5.0 / 2.0 instead of
+1.5 / 0.5), so the totals are not comparable with the v1 teacher's. The posture probe is the
+comparison. Also open: v2 changed three reward terms, pinned a curriculum and added budget at once;
+which of those did the work needs an ablation (one change at a time from `model_5999.pt`, 1 500
+iterations each) — planned.
 
 What happens next is scripted (one shell script, logged to `logs/pipeline.log`): continue this
 teacher for another 6 000 iterations (the stock teacher in the upstream lineage was trained for

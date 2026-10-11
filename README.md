@@ -2,8 +2,10 @@
 
 **A journal of re-training the Microduck's skills from scratch on a consumer PC** — an RTX 5090
 under WSL2 on Windows 11 — with my own policies and without the private teacher checkpoints the official recipe depends on.
-Every step, number and dead end is written down, so that anyone with a single consumer GPU can
-reproduce the pipeline.
+Every step, number and dead end is written down, so that anyone with an RTX 5090-class consumer
+GPU can reproduce the pipeline at the times reported here (a smaller card needs fewer parallel
+environments and proportionally more time). **Everything below is simulation only; nothing has run
+on a real robot.**
 
 ## Why train your own
 
@@ -11,10 +13,12 @@ The skills that come with the robot are finished ONNX files, and the viewer can 
 them (walk while a velocity is commanded, stand up when it is zero). That is enough to *watch* a duck
 get up. It is not enough to *change* anything:
 
-- **The shipped policies are end points, not starting points.** In the official recipe every new or
-  modified skill is distilled from, or warm-started on, teacher checkpoints that live in a private
-  wandb project; without them the official training commands stop with an HTTP 403. So the first job
-  here was to rebuild those teachers, and every later skill can be trained on this PC.
+- **The shipped policies are end points, not starting points.** The basic skills (walking,
+  stand-up) train from scratch with the public recipe. The *composite* ones do not: VelStand (walk +
+  get-up in one network) is distilled from, and warm-started on, teacher checkpoints that live in a
+  private wandb project, and the official training command stops with an HTTP 403 without them. So
+  the first job here was to rebuild those teachers; after that, composite skills can be trained on
+  this PC too.
 - **What you don't like, you can fix.** The first fall-recovery policy trained here "stood up" into
   a 34° forward lean. Owning the teacher meant changing its reward
   ([`patches/standup-stand-straight.patch`](patches/standup-stand-straight.patch)) and re-training,
@@ -26,8 +30,9 @@ get up. It is not enough to *change* anything:
 - **One network instead of a hand-off.** Chaining walk + stand-up in the viewer switches networks in
   the middle of a fall. VelStand learns both in one network, which is what runs on the real robot,
   and training it is exactly what needs the teachers above.
-- **Reproducible end to end.** Offline wandb, every command, number and dead end in `docs/`, so
-  the next person needs neither the private project nor a workstation.
+- **Reproducible from the record.** Offline wandb, the exact scripts in `scripts/`, every number
+  and dead end in `docs/`, so the next person needs neither the private project nor a workstation.
+  (Still missing: the checkpoints themselves and a fixed-seed evaluation — see Status.)
 
 What is different from the official setup:
 
@@ -35,7 +40,7 @@ What is different from the official setup:
 |---|---|---|
 | Hardware | Linux workstations (COACH2, RTX 5090) | Windows 11 + WSL2 Ubuntu 24.04, RTX 5090 + Intel iGPU (hence the WSLg pitfalls) |
 | Walking policy | `alpha_walking` from wandb `441tzs6d` | `first-walk`, trained here from scratch, 4096 envs × 10 000 iterations |
-| Fall recovery | VelStand distilled from a **private** stand-up expert (`69u48n8l`) | own `StandUp` teacher (6 000 iterations) + VelStand with local checkpoints — gets up 8/8 in the push test |
+| Fall recovery | VelStand distilled from a **private** stand-up expert (`69u48n8l`) | own `StandUp` teacher (13 500 iterations) + VelStand with local checkpoints — in the 8-push smoke test v1 went down 1/8 standing and 5/8 walking and got back to standing height every time, but into a 34° lean (fixed in the teacher, VelStand v2 in test) |
 | Body-pose control | tilt from the shipped stand expert, crouch "not learned" | teacher rewards made command-relative, crouch taught by the own teacher (in progress) |
 | Tooling | wandb online, internal eval scripts | `WANDB_MODE=offline`, everything reproducible from this repo |
 
@@ -47,11 +52,13 @@ while the same GPU keeps training. Each duck starts an episode on the ground and
 
 ## Status (2026-10-11)
 
+✅ = verified in simulation here · 🔄 = training / being tested · real robot: **not tested** (no robot here).
+
 | Milestone | State | Notes |
 |---|---|---|
 | RTX 5090 (Blackwell, `sm_120`) runs the official `microduck_rl` stack | ✅ verified | `warp-lang 1.12.0` / `mjlab 1.3.0` / `torch 2.9.1+cu128`, WSL2 Ubuntu 24.04 — see [docs/setup-wsl2-rtx5090.md](docs/setup-wsl2-rtx5090.md) |
 | Walking policy (`Mjlab-Velocity-Flat-MicroDuck`) | ✅ trained | 4096 envs × 10 000 iterations, all 41 checkpoints exported to ONNX — see [docs/training-log.md](docs/training-log.md) |
-| Fall recovery (`Mjlab-VelStand-*`) | ✅ trained | The official recipe distils a stand-up expert from a **private** wandb project (HTTP 403), so a `StandUp` teacher was trained here first (6 000 iterations, 2 h 30) and VelStand warm-started from the walk policy with local teachers (3 000 iterations, 1 h 35). Push test: **gets up 8/8** standing and walking, where the walk policy stays down 8/8 — but v1 "stands" pitched 34° forward with the head tucked (the teacher's lean basin). Teacher v2 with stronger upright rewards (13 500 iterations in total) ends every get-up at pitch ≈ 0° and stays upright 8/8 in the push test; VelStand v2 (6 000 iterations) and v3 (rough terrain + backlash) are training with it — see [docs/velstand-without-private-teachers.md](docs/velstand-without-private-teachers.md) and [docs/training-log.md](docs/training-log.md) |
+| Fall recovery (`Mjlab-VelStand-*`) | ✅ trained | The official recipe distils a stand-up expert from a **private** wandb project (HTTP 403), so a `StandUp` teacher was trained here first (6 000 iterations, 2 h 30) and VelStand warm-started from the walk policy with local teachers (3 000 iterations, 1 h 35). 8-push smoke test (1 m/s, random direction, 6 s window): v1 went **down 1/8 standing, 5/8 walking** and was back above 100 mm trunk height **every time it went down** (the walk policy alone stays down 8/8) — but v1 "stands" pitched 34° forward with the head tucked (the teacher's lean basin). Recovery took 1–3 s in the posture probe. Not yet done: a fixed-seed battery per spawn type (face-down / face-up / side) with recovery time and final posture. Teacher v2 with stronger upright rewards (13 500 iterations in total) ends every get-up at pitch ≈ 0° and stays upright 8/8 in the push test; VelStand v2 (6 000 iterations) and v3 (rough terrain + backlash) are training with it — see [docs/velstand-without-private-teachers.md](docs/velstand-without-private-teachers.md) and [docs/training-log.md](docs/training-log.md) |
 | Body-pose commands (crouch / tilt while standing) | 🔄 in progress | Measured: neither the walk+get-up policy nor the teacher crouches, and tilt tracks only to ~10°. The teacher's fixed-pose rewards are made command-relative ([`patches/body-wide.patch`](patches/body-wide.patch)); teacher v3 and VelStand v4 are queued after VelStand v3 — see [docs/training-log.md](docs/training-log.md#body-pose-commands-what-the-policies-actually-do-with-them-2026-10-11-1405) |
 
 ## Hardware & software
@@ -81,14 +88,27 @@ docs/
   velstand-without-private-teachers.md   how to train fall recovery without the private wandb teachers
 scripts/
   export_all.sh                     export every checkpoint of a run to ONNX
-  run_viewer.sh                     launch the CPU MuJoCo viewer with the right env vars
+  run_viewer.sh / tmux_viewer.sh    CPU MuJoCo viewer with the right env vars (tmux variant takes injected keys)
+  train_standup_teacher.sh          teacher v1 (6 000 iterations from scratch)
+  train_standup_teacher_v2_straight.sh   teacher v2 fine-tune (stand-straight rewards)
+  train_velstand_v1.sh              VelStand v1 (warm start from the walk, local teachers)
+  pipeline_round1_*.sh              teacher v2 → continue → VelStand v2 → v3, with probes and push tests
+  pipeline_round1b_resume_after_sleep.sh   the resume after the PC went to sleep mid-run
+  pipeline_round2_body_pose.sh      teacher v3 (body-pose) → VelStand v4
+  pushtest.sh                       8 random pushes in the viewer: moved / went down / upright at the end
+  posture_probe.sh                  trunk height, pitch, roll and joint angles before and after pushes
+  bodypose_probe.sh                 commanded vs measured crouch / tilt
   wslg_copymode.ps1                 check / fix the WSLg copy-mode blank window without wsl --shutdown
-patches/                            config diffs against upstream microduck_rl (local teachers, stand-straight rewards)
+patches/                            config diffs against upstream microduck_rl, applied in this order:
+  velstand-local-teachers.patch     MICRODUCK_STAND_EXPERT / MICRODUCK_WALK_ANCHOR = local checkpoint paths
+  standup-stand-straight.patch      MICRODUCK_STANDUP_STRAIGHT=1 (teacher v2)
+  body-wide.patch                   MICRODUCK_BODY_WIDE=1 (teacher v3 / VelStand v4, in progress)
 results/                            screenshots used in this README and the docs
 ```
 
-Checkpoints (`.pt`) and exported policies (`.onnx`) are **not** in this repo; they will be published
-on the Hugging Face Hub via `uv run publish`.
+Checkpoints (`.pt`) and exported policies (`.onnx`) are **not** in this repo yet. Plan: a GitHub
+release per round with the ONNX files, their config and sha256 sums, once the body-pose round (v4) is
+in; the Hub (`uv run publish`) after that.
 
 ## Quick start (what actually worked here)
 
@@ -96,6 +116,10 @@ on the Hugging Face Hub via `uv run publish`.
 # WSL2 Ubuntu 24.04, NVIDIA driver >= 580 on the Windows side
 curl -LsSf https://astral.sh/uv/install.sh | sh
 git clone https://github.com/pollen-robotics/microduck_rl && cd microduck_rl
+git checkout ceca0170                             # the upstream commit every run below used
+git apply /path/to/my-microduck-journal/patches/velstand-local-teachers.patch
+git apply /path/to/my-microduck-journal/patches/standup-stand-straight.patch
+git apply /path/to/my-microduck-journal/patches/body-wide.patch   # only needed for the body-pose round
 UV_HTTP_TIMEOUT=600 uv sync --locked              # ~2 GB of CUDA wheels on first run
 
 # smoke test (always first), then the real thing
@@ -106,6 +130,13 @@ WANDB_MODE=offline uv run train Mjlab-Velocity-Flat-MicroDuck --env.scene.num-en
 uv run scripts/export.py Mjlab-Velocity-Flat-MicroDuck --checkpoint-file logs/rsl_rl/velocity/<run>/model_10000.pt --onnx-file walk.onnx
 MESA_D3D12_DEFAULT_ADAPTER_NAME=NVIDIA GALLIUM_DRIVER=d3d12 uv run scripts/infer_policy.py --walking walk.onnx --new-cmd-obs
 ```
+
+The full order of runs, each with the exact command, is in [docs/training-log.md](docs/training-log.md)
+and the scripts above: walk (10 000 iterations) → `train_standup_teacher.sh` (6 000) →
+`train_standup_teacher_v2_straight.sh` (1 500, then `pipeline_round1_*.sh` continues it by 6 000 and
+trains VelStand v2 / v3) → `pipeline_round2_body_pose.sh`. Every pipeline step runs `pushtest.sh`
+and `posture_probe.sh` on the result and appends to `logs/pipeline*.log`. Run names and checkpoint
+numbers inside the scripts are the ones from this machine; change them to yours.
 
 ## Upstream
 
