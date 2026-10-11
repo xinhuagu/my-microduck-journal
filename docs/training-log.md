@@ -203,10 +203,63 @@ Push test, 8 random 1 m/s pushes while standing: **moved 3/8, went down 1/8** (p
 gets up straight when it does fall — which is what VelStand will now be distilled from. The
 teacher was never trained for walking; its forward speed in the test is 0.00 by design.
 
+## Body-pose commands: what the policies actually do with them (2026-10-11 14:05)
+
+The 13-D command vector has six body-pose slots (x, y, z, roll, pitch, yaw); the viewer drives
+z / roll / pitch in body mode (`B`, then arrows and `A`/`E`, 10 mm or 10° per key). Measured
+while standing, with the viewer's `--debug` output (`scripts/wsl_bodypose_probe.sh` in the
+scratch tooling: z from CoM height, tilt from projected gravity, last 2 s of each command):
+
+| command | `velstand_2999` (v1) | `standup_v2_7498` (teacher v2) |
+|---|---|---|
+| crouch −20 mm | −1.5 mm | −2.2 mm |
+| crouch −30 mm | −3.1 mm | −1.9 mm |
+| raise +20 mm | −0.6 mm | 0.0 mm |
+| pitch 10° | **9.2°** | 3.0° |
+| pitch 20° | 1.9° (outside the ±12° training range: gives up) | 0.2° |
+| roll 10° | 1.7° | 1.0° |
+
+Neither policy crouches; v1 tracks a pitch command only inside the ±12° it was trained for, and
+the stand-straight teacher v2 answers 10° with 3°. Three things in the stock StandUp recipe
+explain the teacher: `height_stand` / `height_stand_sharp` / `height_stand_l1`, `upright_sharp`
+and `standing_composite` all pull toward **one** fixed pose (`STAND_Z`, vertical), so every
+commanded crouch or tilt is taxed by the strongest terms in the stack. Upstream handles the
+conflict by *fading* those terms (the `*_weight` curricula at iterations 3000/4000) while
+`body_pose_tracking` ramps up to 4.0 — and the stand-straight patch above pinned `upright_sharp`
+at 5.0 precisely to stop the lean basin, which also killed commanded tilt. Upstream's VelStand
+notes agree on the crouch side: "z (crouch) is NOT learned" (its stand expert never crouched, and
+PPO alone did not learn it).
+
+Fix ([`patches/body-wide.patch`](../patches/body-wide.patch), enabled with `MICRODUCK_BODY_WIDE=1`):
+
+- Four command-relative reward functions added to `mdp.py`: `height_target_gaussian_cmd`,
+  `height_l1_penalty_cmd`, `upright_gaussian_at_height_cmd` (tilt measured against the commanded
+  roll/pitch, same convention as upstream's `upright_body_cmd_relative`; height gate shifts with
+  the commanded z) and `standing_composite_score_cmd` (height and upright targets follow the
+  command; the joint-pose factor's std widens from 0.4 to 0.6 while a command is active, because a
+  crouch bends the knees). At zero command all four are identical to the stock terms, so the
+  straight stand from the previous round is kept.
+- StandUp teacher: those terms swapped in, `body_pose_tracking` pinned at weight 4.0 from
+  iteration 0 (warm start), the relaxed sharp-stand weights (0.2 / 1.5) pinned too, ranges crouch
+  −40 mm / +30 mm and tilt ±15° from the start, ±20° from iteration 500.
+- VelStand: ranges ±20° and −40 / +20 mm, tracking weight 3.0, and `body_no_teacher_axes = ()`
+  in the distillation config so the stand expert teaches the crouch frames as well (upstream
+  leaves z frames to PPO because its expert cannot crouch; ours is trained to).
+- Viewer: `BODY_CMD_MAX_Z` 30 → 40 mm so the crouch can be commanded at all.
+
+Smoke tests (3 iterations × 64 envs) pass for both tasks; the teacher shows
+`Curriculum/body_pose_tracking_weight 4.0`, `body_pose_range 0.2618` (15°) and the relaxed sharp
+weights at iteration 0. Queued as pipeline part 3, after VelStand v3 finishes: teacher v3 (3 000
+iterations, warm start from `model_7498.pt`), posture probe (must still stand straight) + body
+probe, then VelStand v4 (3 000 iterations on the v3 task, expert = teacher v3), push tests +
+probes. Protective fall is a separate later round.
+
 ## Next
 
 1. ~~StandUp v2 → posture probe: does it end at pitch ≈ 0° after a push?~~ Yes (0.2°).
 2. ~~Teacher v2 continued to 7 498 → probe + push test.~~ Done: upright 8/8, down only 1/8.
 3. VelStand v2 (Flat, 6 000, running) with the new teacher; posture probe + push tests; compare with v1.
 4. VelStand v3 (Rough-Backlash, 3 000) warm-started from v2; push tests.
-5. Walk sweep, per-spawn-type get-up battery, README get-up sequence, Hub publish.
+5. Body-pose round (pipeline part 3, queued): teacher v3 + VelStand v4 with crouch / tilt that
+   actually track; then a protective-fall round (tuck the head, land softly) in the teacher.
+6. Walk sweep, per-spawn-type get-up battery, README get-up sequence, Hub publish.

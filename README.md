@@ -36,6 +36,7 @@ What is different from the official setup:
 | Hardware | Linux workstations (COACH2, RTX 5090) | Windows 11 + WSL2 Ubuntu 24.04, RTX 5090 + Intel iGPU (hence the WSLg pitfalls) |
 | Walking policy | `alpha_walking` from wandb `441tzs6d` | `first-walk`, trained here from scratch, 4096 envs × 10 000 iterations |
 | Fall recovery | VelStand distilled from a **private** stand-up expert (`69u48n8l`) | own `StandUp` teacher (6 000 iterations) + VelStand with local checkpoints — gets up 8/8 in the push test |
+| Body-pose control | tilt from the shipped stand expert, crouch "not learned" | teacher rewards made command-relative, crouch taught by the own teacher (in progress) |
 | Tooling | wandb online, internal eval scripts | `WANDB_MODE=offline`, everything reproducible from this repo |
 
 ![64 Microducks in the mjlab StandUp environment, iteration-500 checkpoint](results/standup-500-64envs.jpg)
@@ -51,6 +52,7 @@ while the same GPU keeps training. Each duck starts an episode on the ground and
 | RTX 5090 (Blackwell, `sm_120`) runs the official `microduck_rl` stack | ✅ verified | `warp-lang 1.12.0` / `mjlab 1.3.0` / `torch 2.9.1+cu128`, WSL2 Ubuntu 24.04 — see [docs/setup-wsl2-rtx5090.md](docs/setup-wsl2-rtx5090.md) |
 | Walking policy (`Mjlab-Velocity-Flat-MicroDuck`) | ✅ trained | 4096 envs × 10 000 iterations, all 41 checkpoints exported to ONNX — see [docs/training-log.md](docs/training-log.md) |
 | Fall recovery (`Mjlab-VelStand-*`) | ✅ trained | The official recipe distils a stand-up expert from a **private** wandb project (HTTP 403), so a `StandUp` teacher was trained here first (6 000 iterations, 2 h 30) and VelStand warm-started from the walk policy with local teachers (3 000 iterations, 1 h 35). Push test: **gets up 8/8** standing and walking, where the walk policy stays down 8/8 — but v1 "stands" pitched 34° forward with the head tucked (the teacher's lean basin). Teacher v2 with stronger upright rewards (13 500 iterations in total) ends every get-up at pitch ≈ 0° and stays upright 8/8 in the push test; VelStand v2 (6 000 iterations) and v3 (rough terrain + backlash) are training with it — see [docs/velstand-without-private-teachers.md](docs/velstand-without-private-teachers.md) and [docs/training-log.md](docs/training-log.md) |
+| Body-pose commands (crouch / tilt while standing) | 🔄 in progress | Measured: neither the walk+get-up policy nor the teacher crouches, and tilt tracks only to ~10°. The teacher's fixed-pose rewards are made command-relative ([`patches/body-wide.patch`](patches/body-wide.patch)); teacher v3 and VelStand v4 are queued after VelStand v3 — see [docs/training-log.md](docs/training-log.md#body-pose-commands-what-the-policies-actually-do-with-them-2026-10-11-1405) |
 
 ## Hardware & software
 

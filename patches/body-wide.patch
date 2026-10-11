@@ -1,0 +1,243 @@
+diff --git a/scripts/infer_policy.py b/scripts/infer_policy.py
+index 7b368df0..ddba6677 100755
+--- a/scripts/infer_policy.py
++++ b/scripts/infer_policy.py
+@@ -106,7 +106,7 @@ def load_mujoco_with_bam(xml_path: str, bam_model, timestep: float, vin_drop_gai
+ 
+ 
+ # Body pose command constants (must match training constants)
+-BODY_CMD_MAX_Z = 0.03              # ±30 mm
++BODY_CMD_MAX_Z = 0.04              # ±40 mm (my-microduck-journal: the body-wide teacher crouches to -40 mm)
+ BODY_CMD_MAX_XY = 0.02             # ±20 mm
+ BODY_CMD_MAX_ANGLE = math.radians(30)  # ±30°
+ 
+diff --git a/src/mjlab_microduck/tasks/mdp.py b/src/mjlab_microduck/tasks/mdp.py
+index 85d642c5..84bdf8fa 100644
+--- a/src/mjlab_microduck/tasks/mdp.py
++++ b/src/mjlab_microduck/tasks/mdp.py
+@@ -7669,3 +7669,108 @@ def roulade_lateral_velocity_penalty(
+     """Body-frame lateral (y) linear velocity² — keeps the roll straight."""
+     asset: Entity = env.scene[asset_cfg.name]
+     return torch.nan_to_num(asset.data.root_link_lin_vel_b[:, 1].pow(2), nan=0.0)
++
++
++# ─── my-microduck-journal (MICRODUCK_BODY_WIDE): command-relative standing targets ──────────────
++# The stock stand-up rewards pull toward ONE fixed pose (STAND_Z, vertical). With body-pose commands
++# that is a conflict: every commanded crouch or tilt is taxed by the strongest terms in the stack, and
++# the policy answers 10 deg with 3 deg and -30 mm with -2 mm (measured). These variants move the target
++# with the command: at zero command they are identical to the stock terms (straight stand kept).
++
++
++def _trunk_z_rel(env: ManagerBasedRlEnv, asset: Entity) -> torch.Tensor:
++    return torch.nan_to_num(
++        asset.data.root_link_pos_w[:, 2] - env.scene.terrain.env_origins[:, 2], nan=0.0
++    )
++
++
++def _cmd_tilt_err_sq(env: ManagerBasedRlEnv, asset: Entity, command_name: str) -> torch.Tensor:
++    """|g_b,xy - target(cmd roll, pitch)|^2 — same convention as upright_body_cmd_relative."""
++    quat = asset.data.root_link_quat_w
++    g_b = quat_apply_inverse(quat, asset.data.gravity_vec_w)
++    cmd = env.command_manager.get_command(command_name)
++    roll, pitch = cmd[:, 3], cmd[:, 4]
++    target = torch.stack([torch.sin(pitch), -torch.sin(roll) * torch.cos(pitch)], dim=1)
++    return torch.sum(torch.square(g_b[:, :2] - target), dim=1)
++
++
++def height_target_gaussian_cmd(
++    env: ManagerBasedRlEnv,
++    target_height: float,
++    std: float = 0.02,
++    command_name: str = "body_pose",
++    asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
++) -> torch.Tensor:
++    """``height_target_gaussian`` with target = target_height + commanded dz (cmd[2])."""
++    asset: Entity = env.scene[asset_cfg.name]
++    dz = env.command_manager.get_command(command_name)[:, 2]
++    return torch.exp(-((_trunk_z_rel(env, asset) - (target_height + dz)) / std) ** 2)
++
++
++def height_l1_penalty_cmd(
++    env: ManagerBasedRlEnv,
++    target_height: float,
++    command_name: str = "body_pose",
++    asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
++) -> torch.Tensor:
++    """``height_l1_penalty`` with target = target_height + commanded dz."""
++    asset: Entity = env.scene[asset_cfg.name]
++    dz = env.command_manager.get_command(command_name)[:, 2]
++    return -torch.abs(_trunk_z_rel(env, asset) - (target_height + dz))
++
++
++def upright_gaussian_at_height_cmd(
++    env: ManagerBasedRlEnv,
++    std: float,
++    height_low: float,
++    height_high: float,
++    command_name: str = "body_pose",
++    asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
++) -> torch.Tensor:
++    """``upright_gaussian_at_height`` measured against the commanded roll/pitch; the height gate
++    shifts with the commanded dz. NOTE the error is ~tilt^2 (not tilt^2/2 as in the stock term), so
++    the same sharpness needs std * sqrt(2)."""
++    asset: Entity = env.scene[asset_cfg.name]
++    upright_g = torch.exp(-_cmd_tilt_err_sq(env, asset, command_name) / (std * std))
++    dz = env.command_manager.get_command(command_name)[:, 2]
++    z = _trunk_z_rel(env, asset)
++    t = torch.clamp((z - (height_low + dz)) / max(height_high - height_low, 1e-6), 0.0, 1.0)
++    smooth = t * t * (3.0 - 2.0 * t)
++    return upright_g * smooth
++
++
++def standing_composite_score_cmd(
++    env: ManagerBasedRlEnv,
++    target_height: float,
++    height_std: float,
++    upright_std: float,
++    pose_std: float,
++    joint_indices: list,
++    target_overrides: Optional[dict] = None,
++    command_name: str = "body_pose",
++    pose_std_cmd: float | None = None,
++    asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
++) -> torch.Tensor:
++    """``standing_composite_score`` with height and upright targets following the body command.
++    The joint-pose factor is still measured against the default stand (a crouch bends the knees),
++    so ``pose_std_cmd`` (if given) widens its std while a z/roll/pitch command is active."""
++    asset: Entity = env.scene[asset_cfg.name]
++    cmd = env.command_manager.get_command(command_name)
++    dz = cmd[:, 2]
++    z = _trunk_z_rel(env, asset)
++    height_score = torch.exp(-((z - (target_height + dz)) / height_std) ** 2)
++    upright_score = torch.exp(-_cmd_tilt_err_sq(env, asset, command_name) / (upright_std * upright_std))
++    target = _servo_default_joint_pos(env, asset).clone()
++    if target_overrides:
++        for idx, val in target_overrides.items():
++            target[:, idx] = val
++    joint_pos = _servo_joint_pos(env, asset)[:, joint_indices]
++    target = target[:, joint_indices]
++    pose_err_sq = ((joint_pos - target) ** 2).mean(dim=-1)
++    if pose_std_cmd is not None:
++        active = (cmd[:, 2:5].abs().amax(dim=1) > 1e-3).to(pose_err_sq.dtype)
++        std_eff = pose_std + (pose_std_cmd - pose_std) * active
++        pose_score = torch.exp(-pose_err_sq / (std_eff * std_eff))
++    else:
++        pose_score = torch.exp(-pose_err_sq / (pose_std * pose_std))
++    return height_score * upright_score * pose_score
+diff --git a/src/mjlab_microduck/tasks/microduck_standup_env_cfg.py b/src/mjlab_microduck/tasks/microduck_standup_env_cfg.py
+index 358b567c..b7bac981 100644
+--- a/src/mjlab_microduck/tasks/microduck_standup_env_cfg.py
++++ b/src/mjlab_microduck/tasks/microduck_standup_env_cfg.py
+@@ -19,6 +19,7 @@ the ground_state_mix recovery curriculum has finished ramping.
+ """
+ 
+ import math
++import os
+ from copy import deepcopy
+ 
+ # Symmetry
+@@ -1114,6 +1115,64 @@ def make_microduck_standup_env_cfg(
+         },
+     )
+ 
++    # Local tweak (my-microduck-journal): the teacher trained with the stock weights settles
++    # in the "lean basin" after every get-up (trunk pitched ~34 deg, neck at its -110 deg limit,
++    # z at STAND_Z). MICRODUCK_STANDUP_STRAIGHT=1 makes the final pose pay for being vertical:
++    # sharper/heavier upright terms and a head-pose term that prices the tucked neck.
++    if os.environ.get("MICRODUCK_STANDUP_STRAIGHT"):
++        cfg.rewards["upright_sharp"].weight = 5.0
++        cfg.rewards["upright_sharp"].params["std"] = 0.2
++        cfg.rewards["standing_composite"].params["upright_std"] = 0.25
++        cfg.rewards["head_pose_tracking"].weight = 2.0
++        cfg.rewards["head_pose_tracking"].params["fine_std"] = 0.15
++        # the stock curriculum fades upright_sharp 1.5 -> 1.0 (iter 3000) -> 0.5 (iter 4000); keep it at 5.0
++        cfg.curriculum["upright_sharp_weight"].params["weight_stages"] = [{"step": 0, "weight": 5.0}]
++        print("[standup] MICRODUCK_STANDUP_STRAIGHT: upright_sharp w=5.0 std=0.2, composite upright_std=0.25, head_pose_tracking w=2.0 fine_std=0.15")
++
++    # Local tweak (my-microduck-journal): MICRODUCK_BODY_WIDE=1 — body-pose commands that actually
++    # move the duck. Measured on the stand-straight teacher: 10 deg commanded -> 3 deg, -30 mm -> -2 mm,
++    # because height_stand*, upright_sharp (pinned at 5.0 above) and standing_composite all pull toward
++    # the ONE fixed stand. Make those targets follow the command (identical at zero command), pin the
++    # tracking weight and the relaxed sharp-stand weights from iteration 0 (warm start), and widen the
++    # ranges: crouch -40 mm / +30 mm, tilt +-15 deg at start, +-20 deg from iteration 500.
++    if os.environ.get("MICRODUCK_BODY_WIDE"):
++        trunk = SceneEntityCfg("robot", body_names=("trunk_base",))
++        for _name in ("height_stand", "height_stand_sharp"):
++            _r = cfg.rewards[_name]
++            cfg.rewards[_name] = RewardTermCfg(
++                func=microduck_mdp.height_target_gaussian_cmd, weight=_r.weight,
++                params={"std": _r.params["std"], "target_height": STAND_Z, "command_name": "body_pose", "asset_cfg": trunk},
++            )
++        _r = cfg.rewards["height_stand_l1"]
++        cfg.rewards["height_stand_l1"] = RewardTermCfg(
++            func=microduck_mdp.height_l1_penalty_cmd, weight=_r.weight,
++            params={"target_height": STAND_Z, "command_name": "body_pose", "asset_cfg": trunk},
++        )
++        _r = cfg.rewards["upright_sharp"]
++        cfg.rewards["upright_sharp"] = RewardTermCfg(
++            func=microduck_mdp.upright_gaussian_at_height_cmd, weight=_r.weight,
++            params={"std": 0.28, "height_low": SIT_Z, "height_high": STAND_Z, "command_name": "body_pose", "asset_cfg": trunk},
++        )
++        _r = cfg.rewards["standing_composite"]
++        cfg.rewards["standing_composite"] = RewardTermCfg(
++            func=microduck_mdp.standing_composite_score_cmd, weight=_r.weight,
++            params={**_r.params, "upright_std": 0.35, "command_name": "body_pose", "pose_std_cmd": 0.6},
++        )
++        cfg.rewards["body_pose_tracking"].weight = 4.0
++        cfg.curriculum["body_pose_tracking_weight"].params["weight_stages"] = [{"step": 0, "weight": 4.0}]
++        cfg.curriculum["height_stand_sharp_weight"].params["weight_stages"] = [{"step": 0, "weight": 0.2}]
++        cfg.curriculum["standing_composite_weight"].params["weight_stages"] = [{"step": 0, "weight": 1.5}]
++        _a15, _a20 = math.radians(15), math.radians(20)
++        _axy = (-BODY_CMD_ALIVE_XY, BODY_CMD_ALIVE_XY)
++        _aang = (-BODY_CMD_ALIVE_ANGLE, BODY_CMD_ALIVE_ANGLE)
++        _z = (-BODY_CMD_MAX_Z_DOWN, BODY_CMD_MAX_Z_UP)
++        cfg.curriculum["body_pose_range"].params["range_stages"] = [
++            {"step": 0, "ranges": (_axy, _axy, _z, (-_a15, _a15), (-_a15, _a15), _aang)},
++            {"step": 500 * 24, "ranges": (_axy, _axy, _z, (-_a20, _a20), (-_a20, _a20), _aang)},
++        ]
++        cfg.commands["body_pose"].ranges = cfg.curriculum["body_pose_range"].params["range_stages"][0]["ranges"]
++        print("[standup] MICRODUCK_BODY_WIDE: command-relative height/upright/composite, tracking w=4.0, z -40/+30 mm, tilt 15->20 deg")
++
+     return cfg
+ 
+ 
+diff --git a/src/mjlab_microduck/tasks/microduck_velstand_env_cfg.py b/src/mjlab_microduck/tasks/microduck_velstand_env_cfg.py
+index 929c4bb2..35707d8e 100644
+--- a/src/mjlab_microduck/tasks/microduck_velstand_env_cfg.py
++++ b/src/mjlab_microduck/tasks/microduck_velstand_env_cfg.py
+@@ -216,6 +216,7 @@ Phases (as before, but with a recovery backstop):
+ """
+ 
+ import math
++import os
+ 
+ from mjlab.envs import ManagerBasedRlEnvCfg
+ from mjlab.managers import (
+@@ -328,6 +329,14 @@ BODY_ZERO_CMD_PROB = 0.3
+ BODY_Z_ZERO_PROB = 0.5             # share of body commands that are tilt-only (→ teachable)
+ BODY_TRACK_WEIGHT = 2.0
+ BODY_RANGE_STAGES_ITERS = (0, 300)  # half range → full range (warm start: iters of THIS run)
++# Local tweak (my-microduck-journal): MICRODUCK_BODY_WIDE=1 — ranges of the body-wide teacher
++# (crouch -40 mm, tilt +-20 deg) and a heavier tracking term; the bc_cfg below also hands the crouch
++# frames to the stand expert (ours crouches; the upstream alpha_stand did not).
++if os.environ.get("MICRODUCK_BODY_WIDE"):
++    BODY_CMD_MAX_ANGLE = math.radians(20)
++    BODY_CMD_Z_RANGE = (-0.040, 0.020)
++    BODY_TRACK_WEIGHT = 3.0
++    BODY_RANGE_STAGES_ITERS = (0, 600)
+ # Leg pose stds while a body command is active (standing). The standing stds (hip_roll
+ # 0.05, knee/hip_pitch 0.15, ankle 0.1) priced a 10° commanded roll at -0.85/step.
+ BODY_POSE_STD = {
+@@ -878,7 +887,12 @@ MicroduckVelStandRlCfg = RslRlOnPolicyRunnerCfg(
+         symmetry_cfg=None,
+         bc_cfg={
+             **default_bc_cfg(), "coef": EXPERT_BC_COEF, "gate_tilt_deg": EXPERT_BC_GATE_TILT_DEG,
++            # Local teachers (no wandb needed): MICRODUCK_STAND_EXPERT / MICRODUCK_WALK_ANCHOR = path to a
++            # model_*.pt; distill._resolve_checkpoint prefers these over the wandb run paths.
++            **({"checkpoint_path": os.environ["MICRODUCK_STAND_EXPERT"]} if os.environ.get("MICRODUCK_STAND_EXPERT") else {}),
++            **({"anchor_checkpoint_path": os.environ["MICRODUCK_WALK_ANCHOR"]} if os.environ.get("MICRODUCK_WALK_ANCHOR") else {}),
+             **({"body_slice": (55, 61)} if ENABLE_BODY_CONTROL else {}),
++            **({"body_no_teacher_axes": ()} if os.environ.get("MICRODUCK_BODY_WIDE") else {}),
+             **({"unanchor_turn_in_place": True} if ENABLE_YAW_FIX else {}),
+         } if ENABLE_EXPERT_BC else None,
+     ),
