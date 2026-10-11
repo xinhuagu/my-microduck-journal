@@ -14,7 +14,8 @@ iterations (24 env-steps each). Checkpoints every 250 iterations.
 | 2026-10-10 23:57 → 10-11 02:28 | **`microduck_stand`** (stand-up teacher) | `Mjlab-StandUp-Flat-MicroDuck` | 4096 | 6 000 (last checkpoint `model_5999.pt`) | **2 h 30 min**, 1.42–1.5 s/iteration, 25 checkpoints | push test below: 4500 and 5999 get up 8/8, 3000 sits 8/8 |
 | 2026-10-11 02:41 → 04:16 | **`velstand`** (walk + get-up) | `Mjlab-VelStand-Flat-MicroDuck` | 4096 | 3 000 (last checkpoint `model_2999.pt`) | **1 h 35 min**, 1.70 s/iteration, 13 checkpoints | warm start from `first-walk/model_10000.pt`, expert `microduck_stand/model_5999.pt`, anchor `model_10000.pt`; **gets up 8/8 standing and 8/8 walking** — push tests below |
 | 2026-10-11 07:59 → 08:35 | **`microduck_stand` v2** (stand straight) | `Mjlab-StandUp-Flat-MicroDuck` + `MICRODUCK_STANDUP_STRAIGHT=1` | 4096 | 1 500 | 36 min, warm start from `model_5999.pt` | **ends upright** — posture probe after pushes: mean \|pitch\| 0.2° (v1: 34°), neck back at 0°; `upright_sharp` reward 0.10 → 4.75 of 5, mean reward 4 → 89. Fix: upright_sharp 5.0 (curriculum pinned), composite upright_std 0.25, head_pose_tracking 2.0 / fine_std 0.15 |
-| 2026-10-11 08:37 → | **`microduck_stand` v2** (continued) | same | 4096 | +6 000 (→ 7 499), **running** | resume from `model_1499.pt` | total teacher budget 6 000 + 1 500 + 6 000 = 13 500 iterations; then VelStand v2 (Flat, 6 000) and v3 (Rough-Backlash, 3 000) follow automatically |
+| 2026-10-11 08:37 → 11:02 | **`microduck_stand` v2** (continued) | same | 4096 | +6 000 (→ 7 498) | 2 h 26 min, resume from `model_1499.pt` | **final teacher** `model_7498.pt`, total budget 6 000 + 1 500 + 6 000 = 13 500 iterations. Probe: stands at pitch 0.6° throughout, neither probe push takes it down; push test: went down 1/8 (to 46 mm, back up), upright at end **8/8** |
+| 2026-10-11 11:04 → | **`velstand` v2** (walk + get-up) | `Mjlab-VelStand-Flat-MicroDuck` | 4096 | 6 000, **running** | warm start from `first-walk/model_10000.pt`, expert = teacher v2 `model_7498.pt`, anchor = walk | 1.67 s/iteration → ≈ 2 h 50 min; then VelStand v3 (Rough-Backlash, 3 000) follows automatically |
 
 ## `microduck_stand` — iteration 500 check (2026-10-11 00:12)
 
@@ -178,10 +179,34 @@ teacher for another 6 000 iterations (the stock teacher in the upstream lineage 
 6 000 iterations (warm start from `first-walk/model_10000.pt`, expert = teacher v2, anchor = walk),
 push tests, then **VelStand v3** on `Rough-Backlash` for 3 000 iterations warm-started from v2.
 
+### Result: final teacher `model_7498.pt` (2026-10-11 11:02)
+
+Plain `--agent.resume` (not a warm start) from `model_1499.pt`, so the iteration counter and the
+stock curricula continue: 1 499 → 7 498 in 2 h 26 min (1.30 s collection + 0.07 s learning per
+iteration). The reward totals *drop* at iteration 4 000 — mean reward 89.9 → 70.9 — but that is
+the stock weight curricula, not a regression: `height_stand_sharp_weight` 0.5 → 0.2,
+`standing_composite_weight` 2.5 → 1.5, `body_pose_tracking_weight` 3 → 4, `head_pose_bias_weight`
+0.5 → 1.5, while the pinned `upright_sharp_weight` stays at 5.0 and the term itself stays at
+4.57–4.67 of a possible 5.
+
+| iteration | mean reward | `upright_sharp` | `head_pose_tracking` | `standing_composite` | episode length |
+|---|---|---|---|---|---|
+| 1 500 | 11.2 | 0.47 | 0.21 | 0.34 | 45 (just resumed) |
+| 3 000 | 89.9 | 4.67 | 1.51 | 3.31 | 300 |
+| 4 500 | 70.9 | 4.57 | 1.46 | 1.33 (weight 1.5) | 300 |
+| 7 498 | 71.2 | 4.59 | 1.50 | 1.33 | 300 |
+
+Posture probe on `standup_v2_7498.onnx`: pitch 0.5–1.0° the whole time, neck −3°; neither probe
+push takes it down any more (roll −30° at the push, back to 0.2° one second later, min z 0.115 m).
+Push test, 8 random 1 m/s pushes while standing: **moved 3/8, went down 1/8** (push 7: down to
+46 mm, back to 117 mm), **upright at end 8/8**. So the final teacher mostly resists the push, and
+gets up straight when it does fall — which is what VelStand will now be distilled from. The
+teacher was never trained for walking; its forward speed in the test is 0.00 by design.
+
 ## Next
 
 1. ~~StandUp v2 → posture probe: does it end at pitch ≈ 0° after a push?~~ Yes (0.2°).
-2. Teacher v2 continued to 7 499 (running) → probe + push test.
-3. VelStand v2 (Flat, 6 000) with the new teacher; posture probe + push tests; compare with v1.
+2. ~~Teacher v2 continued to 7 498 → probe + push test.~~ Done: upright 8/8, down only 1/8.
+3. VelStand v2 (Flat, 6 000, running) with the new teacher; posture probe + push tests; compare with v1.
 4. VelStand v3 (Rough-Backlash, 3 000) warm-started from v2; push tests.
 5. Walk sweep, per-spawn-type get-up battery, README get-up sequence, Hub publish.
