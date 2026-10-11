@@ -61,7 +61,7 @@ results/                            (coming) reward curves, GIFs
 ```
 
 Checkpoints (`.pt`) and exported policies (`.onnx`) are **not** in this repo; they will be published
-on the Hugging Face Hub via `uv run publish` so that `sudo robotctl policy load` can install them.
+on the Hugging Face Hub via `uv run publish`.
 
 ## Quick start (what actually worked here)
 
