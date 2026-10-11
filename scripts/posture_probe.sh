@@ -3,9 +3,9 @@
 # any directory: `bash scripts/posture_probe.sh` — it cd's into ~/microduck_rl itself. Companion scripts are
 # looked up next to this file.
 # Measure body pitch and leg joint angles before and after pushes, using the viewer's --debug prints.
-#   posture_probe.sh <policy.onnx> [flag=--walking] [pushes=3]
+#   wsl_posture_probe.sh <policy.onnx> [flag=--walking] [pushes=3]
 export PATH="$HOME/.local/bin:$PATH"
-ONNX="${1:?onnx}"; FLAG="${2:---walking}"; PUSHES="${3:-3}"
+ONNX="${1:?onnx}"; FLAG="${2:---walking}"; PUSHES="${3:-3}"; PREKEYS="${4:-}"   # e.g. "Up Up" = walk at 0.30 m/s before the pushes
 cd "$HOME/microduck_rl" || exit 1
 pkill -f infer_policy.py 2>/dev/null; tmux kill-session -t pp 2>/dev/null; sleep 1
 LOG=/tmp/posture_probe.log; : > "$LOG"
@@ -13,6 +13,8 @@ tmux new-session -d -s pp -x 200 -y 50 "export PATH=\$HOME/.local/bin:\$PATH MES
 tmux pipe-pane -o -t pp "cat >> $LOG"
 for i in $(seq 1 240); do grep -q "Keyboard controls" "$LOG" 2>/dev/null && break; sleep 0.5; done
 sleep 8
+for k in $PREKEYS; do tmux send-keys -t pp "$k"; sleep 0.3; done
+[ -n "$PREKEYS" ] && sleep 4
 echo "MARK_PUSH_START" >> "$LOG"
 for p in $(seq 1 "$PUSHES"); do tmux send-keys -t pp p; sleep 7; echo "MARK_PUSH_$p" >> "$LOG"; done
 tmux kill-session -t pp 2>/dev/null; pkill -f infer_policy.py 2>/dev/null

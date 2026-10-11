@@ -3,7 +3,7 @@
 # any directory: `bash scripts/tmux_viewer.sh` — it cd's into ~/microduck_rl itself. Companion scripts are
 # looked up next to this file.
 # Start infer_policy.py inside tmux session "duck" with the given args, wait until it is ready.
-#   tmux_viewer.sh --standing exports/standup_500.onnx --new-cmd-obs
+#   wsl_tmux_viewer2.sh --standing exports/standup_500.onnx --new-cmd-obs
 export PATH="$HOME/.local/bin:$PATH"
 pkill -f infer_policy.py 2>/dev/null; sleep 2
 tmux kill-session -t duck 2>/dev/null

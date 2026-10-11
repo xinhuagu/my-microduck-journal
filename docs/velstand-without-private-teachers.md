@@ -1,10 +1,10 @@
 # Fall recovery (VelStand) without Pollen's private teachers
 
-**Status: v1 done (2026-10-11 04:30), v2 in progress.** v1 gets up to a 34° forward lean rather than a
+**Status: v2 done (2026-10-11 14:32) — gets up straight; v3 (rough terrain + backlash) training.** v1 gets up to a 34° forward lean rather than a
 straight stand (see [training-log.md](training-log.md#posture-probe-the-get-up-ends-in-a-lean-not-a-stand-2026-10-11-075x)). The teacher was
 re-trained with stronger upright rewards and now ends every get-up at pitch ≈ 0° (final teacher `model_7498.pt`,
-13 500 iterations in total, upright 8/8 in the push test, 2026-10-11 11:02). VelStand v2 (Flat, 6 000 iterations,
-started 11:04) and v3 (Rough-Backlash, 3 000) are training with it. A VelStand policy trained with a self-trained stand-up teacher
+13 500 iterations in total, upright 8/8 in the push test, 2026-10-11 11:02). VelStand v2 (Flat, 6 000 iterations) trained with it and ends every get-up at
+pitch 1–3° — results in [training-log.md](training-log.md#velstand-v2--results-2026-10-11-1445); v3 (Rough-Backlash, 3 000) is training. A VelStand policy trained with a self-trained stand-up teacher
 (`microduck_stand/model_5999.pt`) and `first-walk/model_10000.pt` as warm start + walk anchor gets up
 8/8 after pushes, standing and walking — see [Result](#result) below and
 [training-log.md](training-log.md).

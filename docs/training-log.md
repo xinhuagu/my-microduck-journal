@@ -15,7 +15,8 @@ iterations (24 env-steps each). Checkpoints every 250 iterations.
 | 2026-10-11 02:41 → 04:16 | **`velstand`** (walk + get-up) | `Mjlab-VelStand-Flat-MicroDuck` | 4096 | 3 000 (last checkpoint `model_2999.pt`) | **1 h 35 min**, 1.70 s/iteration, 13 checkpoints | warm start from `first-walk/model_10000.pt`, expert `microduck_stand/model_5999.pt`, anchor `model_10000.pt`; **gets up 8/8 standing and 8/8 walking** — push tests below |
 | 2026-10-11 07:59 → 08:35 | **`microduck_stand` v2** (stand straight) | `Mjlab-StandUp-Flat-MicroDuck` + `MICRODUCK_STANDUP_STRAIGHT=1` | 4096 | 1 500 | 36 min, warm start from `model_5999.pt` | **ends upright** — posture probe after pushes: mean \|pitch\| 0.2° (v1: 34°), neck back at 0°; `upright_sharp` reward 0.10 → 4.75 of 5, mean reward 4 → 89. Fix: upright_sharp 5.0 (curriculum pinned), composite upright_std 0.25, head_pose_tracking 2.0 / fine_std 0.15 |
 | 2026-10-11 08:37 → 11:02 | **`microduck_stand` v2** (continued) | same | 4096 | +6 000 (→ 7 498) | 2 h 26 min, resume from `model_1499.pt` | **final teacher** `model_7498.pt`, total budget 6 000 + 1 500 + 6 000 = 13 500 iterations. Probe: stands at pitch 0.6° throughout, neither probe push takes it down; push test: went down 1/8 (to 46 mm, back up), upright at end **8/8** |
-| 2026-10-11 11:04 → | **`velstand` v2** (walk + get-up) | `Mjlab-VelStand-Flat-MicroDuck` | 4096 | 6 000, **running** | warm start from `first-walk/model_10000.pt`, expert = teacher v2 `model_7498.pt`, anchor = walk | 1.67 s/iteration → ≈ 2 h 50 min; then VelStand v3 (Rough-Backlash, 3 000) follows automatically |
+| 2026-10-11 11:04 → 14:32 | **`velstand` v2** (walk + get-up) | `Mjlab-VelStand-Flat-MicroDuck` | 4096 | 6 000 | 1 h 30 + 1 h 50 (the PC went to sleep at iteration 2 784; resumed from `model_2750.pt` at 12:42, curricula continued) | warm start from `first-walk/model_10000.pt`, expert = teacher v2 `model_7498.pt`. **Gets up straight**: walking pushes down 5/8, back up 5/5 within ≈ 1 s at pitch 1–3°; standing pushes down 0/8. `recovery_success` 0.018 (v1: 0.003). Lost the tilt tracking v1 had (10° → 3.6°) — see the body-pose section |
+| 2026-10-11 14:35 → | **`velstand` v3** (rough + backlash) | `Mjlab-VelStand-Rough-Backlash-MicroDuck` | 4096 | 3 000, **running** | warm start from v2 `model_5999.pt`, same teachers | rough terrain and actuator backlash on top of v2 |
 
 ## `microduck_stand` — iteration 500 check (2026-10-11 00:12)
 
@@ -208,6 +209,40 @@ Push test, 8 random 1 m/s pushes while standing: **moved 3/8, went down 1/8** (p
 gets up straight when it does fall — which is what VelStand will now be distilled from. The
 teacher was never trained for walking; its forward speed in the test is 0.00 by design.
 
+## `velstand` v2 — results (2026-10-11 14:45)
+
+Same 8-push smoke test as v1 (random direction, 1 m/s, 6 s window), `velstand_v2_5999.onnx`:
+
+| mode | pushes that moved it | went below 90 mm | upright 6 s later |
+|---|---|---|---|
+| standing | 1/8 | **0/8** | 8/8 (never fell) |
+| walking at 0.30 m/s (achieved 0.16) | 6/8 | **5/8** | **8/8** |
+
+The question from the v1 round was *how* it stands afterwards. Posture probe while walking
+(`posture_probe.sh … --walking 6 "Up Up"`, one row per second; pitch from projected gravity):
+
+| event | lowest point | 1 s later | 2 s later |
+|---|---|---|---|
+| stumble while walking (no push) | z 0.054 m, pitch −165° (on its back) | z 0.051, −89° | z 0.122, **2.5°** |
+| push 1 | z 0.073, −164° (on its back) | z 0.124, **4.0°** | 1.1°, walking again |
+| push 2 | z 0.065, 61° | z 0.125, 5.9° (neck −97° for a moment) | **0.7°**, neck −7° |
+| push 3 | z 0.112 (stumble only) | 3.0° | 2.6° |
+| push 4 | z 0.092, 64° | z 0.122, **1.4°** | 3.1° |
+| push 5 | z 0.076, 145° (face down) | z 0.122, **2.8°** | 1.1° |
+
+Every fall — on the back, face down, sideways — ends standing within about a second, at the 1–3°
+pitch of the walking gait, with the neck at −5°: the 34° lean basin of v1 is gone, and the gait
+resumes (joint angles cycling, forward speed back at 0.16 m/s). The training curve agrees in its
+own units: `recovery_success` (the bounty that only fires when the trunk is back within 25° of
+vertical) averaged 0.018 per step over the last 2 000 iterations against 0.003 for v1, and the
+expert-BC loss on fallen frames settled at 0.20 (v1 never got below 0.6, because its teacher's
+targets were the lean).
+
+What v2 lost: the body-pose probe gives pitch 10° → 3.6° (v1: 9.2°), 20° → 0.1°, crouch −30 mm
+→ −1 mm. Expected — teacher v2 does not tilt either — and it is what the body-pose round below is
+for. Cost of the recovery skill on walking is unchanged from v1: 0.16 m/s achieved at a 0.30 m/s
+command (walk policy alone: 0.18).
+
 ## Body-pose commands: what the policies actually do with them (2026-10-11 14:05)
 
 The 13-D command vector has six body-pose slots (x, y, z, roll, pitch, yaw); the viewer drives
@@ -263,8 +298,8 @@ probes. Protective fall is a separate later round.
 
 1. ~~StandUp v2 → posture probe: does it end at pitch ≈ 0° after a push?~~ Yes (0.2°).
 2. ~~Teacher v2 continued to 7 498 → probe + push test.~~ Done: upright 8/8, down only 1/8.
-3. VelStand v2 (Flat, 6 000, running) with the new teacher; posture probe + push tests; compare with v1.
-4. VelStand v3 (Rough-Backlash, 3 000) warm-started from v2; push tests.
+3. ~~VelStand v2 (Flat, 6 000) with the new teacher; posture probe + push tests; compare with v1.~~ Done: stands up straight.
+4. VelStand v3 (Rough-Backlash, 3 000, running) warm-started from v2; push tests.
 5. Body-pose round (pipeline part 3, queued): teacher v3 + VelStand v4 with crouch / tilt that
    actually track; then a protective-fall round (tuck the head, land softly) in the teacher.
 6. Walk sweep, per-spawn-type get-up battery, README get-up sequence, Hub publish.
