@@ -4,8 +4,7 @@
 under WSL2 on Windows 11 — with my own policies and without the private teacher checkpoints the official recipe depends on.
 Every step, number and dead end is written down, so that anyone with an RTX 5090-class consumer
 GPU can reproduce the pipeline at the times reported here (a smaller card needs fewer parallel
-environments and proportionally more time). **Everything below is simulation only; nothing has run
-on a real robot.**
+environments and proportionally more time).
 
 ## Why train your own
 
@@ -52,7 +51,7 @@ while the same GPU keeps training. Each duck starts an episode on the ground and
 
 ## Status (2026-10-11)
 
-✅ = verified in simulation here · 🔄 = training / being tested · real robot: **not tested** (no robot here).
+✅ = verified in simulation here · 🔄 = training / being tested.
 
 | Milestone | State | Notes |
 |---|---|---|
