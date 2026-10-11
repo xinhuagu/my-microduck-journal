@@ -98,6 +98,19 @@ request still fails with **HTTP 403** — the project is private. The Hugging Fa
 exported ONNX files, not the `.pt` checkpoints the distillation code needs. See
 [velstand-without-private-teachers.md](velstand-without-private-teachers.md).
 
+### Exporting a VelStand checkpoint fails with wandb 403 even though training worked
+
+`scripts/export.py` constructs the full runner, and VelStand's PPO subclass resolves its two BC
+teachers in the constructor — so the export needs the same `MICRODUCK_STAND_EXPERT` /
+`MICRODUCK_WALK_ANCHOR` variables as training, or it goes to wandb and gets the 403.
+
+### Push test showed identical `trunk_z` for every push
+
+The first version of the push-test script ran the viewer as `infer_policy.py ... | tee log` inside
+tmux. With the pipe in place the injected keys never reached the policy (and Python's stdout became
+block-buffered). Run the viewer without a pipeline and capture the pane with
+`tmux pipe-pane -o "cat >> log"` instead; always check that at least one push changed `trunk_z`.
+
 ### Walking policy falls and never gets up
 
 Expected: `Mjlab-Velocity-*` has no fall-recovery curriculum. Fall recovery is the `VelStand`

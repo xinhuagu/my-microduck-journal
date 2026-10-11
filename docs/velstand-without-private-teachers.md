@@ -1,7 +1,9 @@
 # Fall recovery (VelStand) without Pollen's private teachers
 
-**Status: VelStand training started 2026-10-11 ~02:50** with the self-trained teacher
-`microduck_stand/model_5999.pt` (gets up 8/8 in the push test) and `first-walk/model_10000.pt` as warm start + anchor.
+**Status: done (2026-10-11 04:30).** A VelStand policy trained with a self-trained stand-up teacher
+(`microduck_stand/model_5999.pt`) and `first-walk/model_10000.pt` as warm start + walk anchor gets up
+8/8 after pushes, standing and walking — see [Result](#result) below and
+[training-log.md](training-log.md).
 
 ## The problem
 
@@ -70,6 +72,17 @@ microduck_stand/model_<N>.pt (ours)      ── stand-up expert (BC) ───�
 5. Evaluate like upstream: push falls, get-up rate, walk sweep for yaw drift; pick the checkpoint by
    behaviour, not by reward (upstream saw checkpoints 500 and 1 499 drift in opposite yaw directions
    while the metrics looked identical).
+
+## Result
+
+- Teacher: `Mjlab-StandUp-Flat-MicroDuck`, 4096 envs, 6 000 iterations, 2 h 30 min on the RTX 5090.
+  Checkpoints up to 3000 sit down after a push and stay; 4500 and 5999 get up 8/8. Used `model_5999.pt`.
+- VelStand: 3 000 iterations, 1 h 35 min (1.70 s/iteration with the BC passes). Checkpoint 2999:
+  standing pushes 8/8 upright (goes down only 1/8), walking pushes 8/8 upright (goes down 5/8, from as
+  low as 43 mm). The same pushes leave the original walk policy on the floor 8/8.
+- Price paid: forward speed at the 0.30 m/s command 0.15 m/s vs 0.18 m/s for the pure walk policy.
+- Everything needed is in this repo: the 5-line patch, the symlink trick, the launch command, and
+  the push-test method; no wandb account is required.
 
 ## Alternatives considered
 

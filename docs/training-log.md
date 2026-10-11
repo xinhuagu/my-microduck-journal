@@ -12,7 +12,7 @@ iterations (24 env-steps each). Checkpoints every 250 iterations.
 | 2026-10-10 | export-all | — | — | 41 checkpoints → ONNX | 41 × ~13 s ≈ 9 min | `exports/first_walk_{0..10000}.onnx`, 793 766 B each |
 | 2026-10-10 | smoke | `Mjlab-VelStand-Flat-MicroDuck` | 64 | — | 14 s | **failed**: wandb 403 on the private teacher checkpoints |
 | 2026-10-10 23:57 → 10-11 02:28 | **`microduck_stand`** (stand-up teacher) | `Mjlab-StandUp-Flat-MicroDuck` | 4096 | 6 000 (last checkpoint `model_5999.pt`) | **2 h 30 min**, 1.42–1.5 s/iteration, 25 checkpoints | push test below: 4500 and 5999 get up 8/8, 3000 sits 8/8 |
-| 2026-10-11 02:41 → | **`velstand`** (walk + get-up) | `Mjlab-VelStand-Flat-MicroDuck` | 4096 | 3 000 max, **running** | — | warm start from `first-walk/model_10000.pt`, expert `microduck_stand/model_5999.pt`, anchor `model_10000.pt`; see [velstand-without-private-teachers.md](velstand-without-private-teachers.md) |
+| 2026-10-11 02:41 → 04:16 | **`velstand`** (walk + get-up) | `Mjlab-VelStand-Flat-MicroDuck` | 4096 | 3 000 (last checkpoint `model_2999.pt`) | **1 h 35 min**, 1.70 s/iteration, 13 checkpoints | warm start from `first-walk/model_10000.pt`, expert `microduck_stand/model_5999.pt`, anchor `model_10000.pt`; **gets up 8/8 standing and 8/8 walking** — push tests below |
 
 ## `microduck_stand` — iteration 500 check (2026-10-11 00:12)
 
@@ -72,7 +72,48 @@ Training-curve note: `Episode_Reward/standing_composite` *falls* from 2.34 (iter
 episodes that start already standing from 40 % to 15 %, so the average height reward over an
 episode drops. Read these curves against the curriculum stage, not on their own.
 
+
+## `velstand` — push tests (2026-10-11 04:30)
+
+Same method as above (8 random 1 m/s pushes, 6 s apart, `trunk_z` from the status lines), now with
+the VelStand checkpoints loaded as the *walking* policy (`infer_policy.py --walking
+exports/velstand_<N>.onnx --new-cmd-obs`). Exporting a VelStand checkpoint needs
+`MICRODUCK_STAND_EXPERT` / `MICRODUCK_WALK_ANCHOR` set as well, because `export.py` builds the
+full runner, teachers included.
+
+**Standing still** (no command):
+
+| checkpoint | pushes that moved it | went below 90 mm | upright 6 s later |
+|---|---|---|---|
+| 1250 | 7/8 | 6/8 (down to 48 mm) | **8/8** |
+| 2000 | 4/8 | 0/8 (never below 107 mm) | **8/8** |
+| 2999 | 4/8 | 1/8 (75 mm) | **8/8** |
+
+**Walking at 0.30 m/s** (two `Up` presses before the pushes), with the original walk policy as the
+control:
+
+| policy | speed before pushes (achieved / cmd) | went below 90 mm | upright 6 s later |
+|---|---|---|---|
+| `velstand_1250` | 0.14 / 0.30 | 7/8 (down to 43 mm) | **8/8** |
+| `velstand_2999` | 0.15 / 0.30 | 5/8 (down to 43 mm) | **8/8** |
+| `first_walk_10000` (Velocity, control) | 0.18 / 0.30 | 8/8 | **0/8** — stays on the ground at 40–50 mm |
+
+Reading: by 2000 iterations the policy mostly *resists* a 1 m/s push while standing; when it does
+go down — and while walking it still goes down most of the time — it stands back up within the
+6 s window every time, from as low as 43 mm (prone). The control run shows what the pure walking
+policy does with the same pushes: flat on the floor, 8/8. Cost: achieved forward speed at the
+0.30 m/s command dropped from 0.18 (walk policy) to 0.14–0.15 m/s, and right after a recovery the
+duck stands for a moment before walking again (the `fwd=+0.00/+0.30` lines at the end of the
+windows). A proper walk sweep (0.3 / 0.4 m/s, yaw drift) and a per-spawn-type get-up battery are
+still to be done; 8 pushes is a smoke test.
+
+Training curves for this run are misleading on their own: `expert_bc_fallen_frac` sits at 0.6–0.7
+and `recovery_success` at ≈0.003 for most of the run, because 45 % of episodes start prone and
+`topple_push` ramps to 1.2 m/s — the policy spends most of its time on the ground *by design*.
+
 ## Next
 
-1. VelStand (running): export, push test, walk sweep; compare with `first_walk_10000.onnx`.
-2. If it holds up: publish both policies to the Hugging Face Hub with `uv run publish`.
+1. Walk sweep for `velstand_2999` vs `first_walk_10000` (0.3 / 0.4 m/s tracking, yaw drift) and a
+   per-spawn-type get-up battery (face-down / face-up / side).
+2. Screenshots of a get-up sequence for the README.
+3. Publish `velstand_2999.onnx` to the Hugging Face Hub with `uv run publish`.
