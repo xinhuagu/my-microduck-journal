@@ -19,6 +19,8 @@ iterations (24 env-steps each). Checkpoints every 250 iterations.
 | 2026-10-11 14:35 → 17:50 | **`velstand` v3** (rough + backlash) | `Mjlab-VelStand-Rough-Backlash-MicroDuck` | 4096 | 3 000 | **3 h 15 min**, 3.7 s/iteration (2.2× the flat task) | warm start from v2 `model_5999.pt`, same teachers. On the flat test scene: standing pushes down 2/8, walking (0.14 m/s) down 6/8, upright 8/8 both, get-ups straight (pitch 1–2°). Sweep → **use `model_2500`** (drift −0.01; 2999 −0.16). `recovery_success` 0.019 |
 | 2026-10-11 17:53 → 19:11 | **`microduck_stand` v3** (body-wide) | `Mjlab-StandUp-Flat-MicroDuck` + `MICRODUCK_STANDUP_STRAIGHT=1` + `MICRODUCK_BODY_WIDE=1` | 4096 | 3 000 | 1 h 18 min, warm start from `model_7498.pt` | **stands straight (0.4°) and tracks the body command**: crouch −30 mm → −28.9 mm, pitch ±10° → 9.9 / −8.8°, ±20° → 19.5 / −19.3°, roll ±10° → 9.6 / −9.4°, raise +20 mm → +12.5 mm (teacher v2: −2 mm, 3°). `body_pose_tracking` 3.25 of 4 |
 | 2026-10-11 19:13 → 22:50 | **`velstand` v4** (body-wide) | `Mjlab-VelStand-Rough-Backlash-MicroDuck` + `MICRODUCK_BODY_WIDE=1` | 4096 | 3 000 | 3 h 37 min (GPU shared with the evaluation runs) | warm start from v3 `model_2999.pt`, expert = teacher v3. **Battery: crouch −28.6 mm, tilt ±10 / ±20° tracked, push recovery 94–98 %** (v2: 76–87 %), get-up 98–100 % — see the v4 section |
+| 2026-10-11 22:59 → 00:05 | **`velocity` walk teacher v2** (turn) | `Mjlab-Velocity-Flat-MicroDuck` + `MICRODUCK_TURN=1` | 4096 | 3 000 | 1 h 06 min, warm start from `first-walk/model_10000.pt` | pipeline part 4. Viewer sweep → `model_1750` (drift −0.02). **Battery: turns better (0.6 → 0.65, ±1.0 → 1.09 / −1.07, drift p90 0.08) but walks slower (0.30 → 0.14 m/s, was 0.20); 0.3 rad/s still 0.08** |
+| 2026-10-12 00:14 → | **`velstand` v5** (turn + body-wide) | `Mjlab-VelStand-Rough-Backlash-MicroDuck` + `MICRODUCK_TURN=1` + `MICRODUCK_BODY_WIDE=1` | 4096 | 3 000, **running** | warm start from v4 `model_2500`, expert = teacher v3, anchor = walk v2 `model_1750` | the only change against v4 is the walk anchor (and the turn sampling); speed is at risk, see below |
 
 ## `microduck_stand` — iteration 500 check (2026-10-11 00:12)
 
@@ -448,6 +450,34 @@ Reading:
 
 Pipeline part 4 (turning) started from this checkpoint at 22:54: viewer sweep of v4, walk teacher
 v2 with `MICRODUCK_TURN=1`, sweep, VelStand v5, tests; its picks will be re-checked with the battery.
+
+## Walk teacher v2 with the turning patch: turns better, walks slower (2026-10-12 00:30)
+
+Pipeline part 4, step N: `Mjlab-Velocity-Flat-MicroDuck` with `MICRODUCK_TURN=1`
+([`patches/turn.patch`](../patches/turn.patch): turn-in-place bucket 25 % of envs sampled from 10 % of
+the range, additive `track_yaw_rate_fine` std 0.35 weight 2), warm start from `first_walk_10000`,
+3 000 iterations in 1 h 06 min. The viewer sweep over 1500–2999 picked `model_1750` (drift −0.02;
+every checkpoint turned 0.56–0.79 at 0.6 rad/s and 0 at 0.3). Battery on `model_1750`, same
+environment as the walk comparison above:
+
+| command | `first_walk_10000` | **walk v2 `1750`** | official `alpha_walking` |
+|---|---|---|---|
+| walk 0.15 / 0.30 / 0.45 m/s | 0.10 / 0.20 / 0.27 | 0.02 / **0.14** / 0.20 | 0.00 / 0.15 / 0.21 |
+| yaw drift p90 at 0.30 / 0.45 | 0.17 / 0.23 | **0.08 / 0.08** | 0.10 / 0.11 |
+| turn +0.3 (per-env p50 / p90) | 0.05 (0.00 / 0.26) | 0.08 (0.01 / 0.29) | 0.00 |
+| turn +0.6 | 0.57 | **0.65** | 0.02 |
+| turn +1.0 / −1.0 | 1.00 / −1.00 | **1.09 / −1.07** | 0.35 / −0.17 |
+
+So the patch did what its two mechanisms promise at 0.6 rad/s and above (more in-place turning, far
+less straight-walk drift) and **did not open the 0.3 rad/s dead zone** (0.08, and only a few ducks
+turn at all: per-env median 0.01) — the same reward-optimum problem upstream hit. It also **cost
+walking speed**: 0.30 → 0.14 m/s against 0.20 for the original teacher, i.e. back to the official
+policy's level. A quarter of the environments now practise turning in place, and the yaw term
+rewards standing still at zero yaw while walking, so the gait got "lazier" forward — a trade-off the
+speed round will have to pay back (it was already the next item).
+
+Consequence for v5 (running since 00:14, anchored to this teacher): turning should carry over,
+speed may drop from v4's 0.18 m/s; the battery tomorrow decides, three columns (v4, v5, official).
 
 ## Official policies measured with the same battery (2026-10-11 21:30)
 
