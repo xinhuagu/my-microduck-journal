@@ -5,6 +5,30 @@ under WSL2 on Windows 11 — with my own policies and without the private teache
 Every step, number and dead end is written down, so that anyone with a single consumer GPU can
 reproduce the pipeline.
 
+## Why train your own
+
+The skills that come with the robot are finished ONNX files, and the viewer can even chain two of
+them (walk while a velocity is commanded, stand up when it is zero). That is enough to *watch* a duck
+get up. It is not enough to *change* anything:
+
+- **The shipped policies are end points, not starting points.** In the official recipe every new or
+  modified skill is distilled from, or warm-started on, teacher checkpoints that live in a private
+  wandb project; without them the official training commands stop with an HTTP 403. So the first job
+  here was to rebuild those teachers, and every later skill can be trained on this PC.
+- **What you don't like, you can fix.** The first fall-recovery policy trained here "stood up" into
+  a 34° forward lean. Owning the teacher meant changing its reward
+  ([`patches/standup-stand-straight.patch`](patches/standup-stand-straight.patch)) and re-training,
+  instead of living with it.
+- **Training budget becomes a choice.** The stand-up teacher here has 13 500 iterations against the
+  ≈ 10 000 of the upstream checkpoint it replaces; VelStand v2 gets 6 000 on top of a
+  10 000-iteration walk, then 3 000 more on rough terrain with actuator backlash. On one consumer
+  GPU each of those is a few hours.
+- **One network instead of a hand-off.** Chaining walk + stand-up in the viewer switches networks in
+  the middle of a fall. VelStand learns both in one network, which is what runs on the real robot,
+  and training it is exactly what needs the teachers above.
+- **Reproducible end to end.** Offline wandb, every command, number and dead end in `docs/`, so
+  the next person needs neither the private project nor a workstation.
+
 What is different from the official setup:
 
 | | Official (upstream) | Here |
@@ -20,7 +44,7 @@ What is different from the official setup:
 iteration-500 checkpoint in mjlab's native viewer (`uv run play ... --num-envs 64 --viewer native`)
 while the same GPU keeps training. Each duck starts an episode on the ground and has to get up.*
 
-## Status (2026-10-10)
+## Status (2026-10-11)
 
 | Milestone | State | Notes |
 |---|---|---|
@@ -56,8 +80,9 @@ docs/
 scripts/
   export_all.sh                     export every checkpoint of a run to ONNX
   run_viewer.sh                     launch the CPU MuJoCo viewer with the right env vars
-patches/                            (coming) config diffs against upstream microduck_rl
-results/                            (coming) reward curves, GIFs
+  wslg_copymode.ps1                 check / fix the WSLg copy-mode blank window without wsl --shutdown
+patches/                            config diffs against upstream microduck_rl (local teachers, stand-straight rewards)
+results/                            screenshots used in this README and the docs
 ```
 
 Checkpoints (`.pt`) and exported policies (`.onnx`) are **not** in this repo; they will be published
