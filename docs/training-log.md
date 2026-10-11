@@ -17,7 +17,8 @@ iterations (24 env-steps each). Checkpoints every 250 iterations.
 | 2026-10-11 08:37 → 11:02 | **`microduck_stand` v2** (continued) | same | 4096 | +6 000 (→ 7 498) | 2 h 26 min, resume from `model_1499.pt` | **final teacher** `model_7498.pt`, total budget 6 000 + 1 500 + 6 000 = 13 500 iterations. Probe: stands at pitch 0.6° throughout, neither probe push takes it down; push test: went down 1/8 (to 46 mm, back up), upright at end **8/8** |
 | 2026-10-11 11:04 → 14:32 | **`velstand` v2** (walk + get-up) | `Mjlab-VelStand-Flat-MicroDuck` | 4096 | 6 000 | 1 h 30 + 1 h 50 (the PC went to sleep at iteration 2 784; resumed from `model_2750.pt` at 12:42, curricula continued) | warm start from `first-walk/model_10000.pt`, expert = teacher v2 `model_7498.pt`. **Gets up straight**: walking pushes down 5/8, back up 5/5 within ≈ 1 s at pitch 1–3°; standing pushes down 0/8. `recovery_success` 0.018 (v1: 0.003). Lost the tilt tracking v1 had (10° → 3.6°) — see the body-pose section |
 | 2026-10-11 14:35 → 17:50 | **`velstand` v3** (rough + backlash) | `Mjlab-VelStand-Rough-Backlash-MicroDuck` | 4096 | 3 000 | **3 h 15 min**, 3.7 s/iteration (2.2× the flat task) | warm start from v2 `model_5999.pt`, same teachers. On the flat test scene: standing pushes down 2/8, walking (0.14 m/s) down 6/8, upright 8/8 both, get-ups straight (pitch 1–2°). Sweep → **use `model_2500`** (drift −0.01; 2999 −0.16). `recovery_success` 0.019 |
-| 2026-10-11 17:53 → | **`microduck_stand` v3** (body-wide) | `Mjlab-StandUp-Flat-MicroDuck` + `MICRODUCK_STANDUP_STRAIGHT=1` + `MICRODUCK_BODY_WIDE=1` | 4096 | 3 000, **running** | warm start from `model_7498.pt` | pipeline part 3: command-relative stand rewards, crouch −40 mm, tilt ±20°; VelStand v4 follows |
+| 2026-10-11 17:53 → 19:11 | **`microduck_stand` v3** (body-wide) | `Mjlab-StandUp-Flat-MicroDuck` + `MICRODUCK_STANDUP_STRAIGHT=1` + `MICRODUCK_BODY_WIDE=1` | 4096 | 3 000 | 1 h 18 min, warm start from `model_7498.pt` | **stands straight (0.4°) and tracks the body command**: crouch −30 mm → −28.9 mm, pitch ±10° → 9.9 / −8.8°, ±20° → 19.5 / −19.3°, roll ±10° → 9.6 / −9.4°, raise +20 mm → +12.5 mm (teacher v2: −2 mm, 3°). `body_pose_tracking` 3.25 of 4 |
+| 2026-10-11 19:13 → | **`velstand` v4** (body-wide) | `Mjlab-VelStand-Rough-Backlash-MicroDuck` + `MICRODUCK_BODY_WIDE=1` | 4096 | 3 000, **running** | warm start from v3 `model_2999.pt`, expert = teacher v3, anchor = walk | the stand expert now teaches the crouch frames too (`body_no_teacher_axes = ()`) |
 
 ## `microduck_stand` — iteration 500 check (2026-10-11 00:12)
 
@@ -316,6 +317,33 @@ iterations, warm start from `model_7498.pt`), posture probe (must still stand st
 probe, then VelStand v4 (3 000 iterations on the v3 task, expert = teacher v3), push tests +
 probes. Protective fall is a separate later round.
 
+## Stand-up teacher v3: straight *and* obedient (2026-10-11 19:15)
+
+3 000 iterations from `model_7498.pt` with the command-relative rewards
+([`patches/body-wide.patch`](../patches/body-wide.patch)), 1 h 18 min. Posture probe: pitch 0.4°
+after pushes, so the command-relative `upright_sharp` kept the straight stand at zero command.
+Body-pose probe, one command per fresh viewer launch (`scripts/bodypose_probe_single.sh`):
+
+| command | teacher v2 `model_7498` | **teacher v3 `model_2999`** |
+|---|---|---|
+| crouch −30 mm | −1.9 mm | **−28.9 mm** |
+| raise +20 mm | 0.0 mm | +12.5 mm (range is +30, the legs do not extend further) |
+| pitch +10° / −10° | 3.0° / — | **+9.9° / −8.8°** |
+| pitch +20° / −20° | 0.2° / — | **+19.5° / −19.3°** |
+| roll +10° / −10° | 1.0° / — | **+9.6° / −9.4°** |
+
+Training terms at 2 999: `body_pose_tracking` 3.25 (of a possible 4), `upright_sharp` 4.48 (of 5),
+mean reward 74. That is the "crouch is not learned" line from the upstream notes answered on the
+teacher side: once the stand rewards follow the command, PPO learns the crouch in 3 000 iterations
+with no other change.
+
+A probe artefact worth recording: the earlier sequential probe (`bodypose_probe.sh`, several
+commands in one viewer session separated by `Space` resets) showed only the first command tracked
+(pitch 10° → 10.0°, then 20° → 0.5°, roll → 0.1). Re-running each command from a fresh launch gives
+the table above, so the sequential script, not the policy, was at fault (the viewer's body-mode
+state after a reset is suspect). Pipeline part 3 still uses the sequential probe for v4; the v4 and
+v5 numbers below are re-measured with the single-launch probe.
+
 ## Turning: where the bottleneck is, and what ours does (2026-10-11 15:20)
 
 Upstream's own notes (in the VelStand config and `docs/velstand_policy.md`) call the deployed policy
@@ -389,6 +417,7 @@ sweep → push tests and all three probes on the pick. Checkpoints are now chose
 
 1. ~~StandUp v2 → posture probe: does it end at pitch ≈ 0° after a push?~~ Yes (0.2°).
 2. ~~Teacher v2 continued to 7 498 → probe + push test.~~ Done: upright 8/8, down only 1/8.
+   ~~Teacher v3 (body-wide): straight + tracks crouch / tilt?~~ Yes: −29 mm, ±20°, ±10° roll.
 3. ~~VelStand v2 (Flat, 6 000) with the new teacher; posture probe + push tests; compare with v1.~~ Done: stands up straight.
 4. ~~VelStand v3 (Rough-Backlash, 3 000) warm-started from v2; push tests.~~ Done, pick 2500.
 5. Body-pose round (pipeline part 3, queued): teacher v3 + VelStand v4 with crouch / tilt that
