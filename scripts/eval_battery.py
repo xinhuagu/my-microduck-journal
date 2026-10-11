@@ -40,21 +40,53 @@ def build(task: str, ckpt: str, num_envs: int, seed: int, device: str, episode_s
     configure_torch_backends()
     env_cfg = load_env_cfg(task, play=True)
     agent_cfg = load_rl_cfg(task)
-    # No surprise pushes / prone respawns during a trial: drop interval events; keep only the time-out termination.
-    env_cfg.events = {k: v for k, v in env_cfg.events.items() if getattr(v, "mode", "") != "interval"}
+    # No surprise pushes during a trial: interval events stay registered (curricula may reference them) but never
+    # fire; curricula are dropped (evaluation only); keep only the time-out termination.
+    for v in env_cfg.events.values():
+        if getattr(v, "mode", "") == "interval":
+            v.interval_range_s = (1.0e6, 1.0e6)
+    env_cfg.curriculum = {}
     env_cfg.terminations = {k: v for k, v in env_cfg.terminations.items() if "time_out" in k}
     env_cfg.episode_length_s = episode_s
     env_cfg.scene.num_envs = num_envs
     env_cfg.seed = seed
     env = ManagerBasedRlEnv(cfg=env_cfg, device=device, render_mode=None)
     env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
-    runner_cls = load_runner_cls(task) or MjlabOnPolicyRunner
-    runner = runner_cls(env, asdict(agent_cfg), device=device)
-    runner.load(ckpt, load_cfg={"actor": True}, strict=True, map_location=device)
-    policy = runner.get_inference_policy(device=device)
+    if ckpt.endswith(".onnx"):
+        policy = OnnxPolicy(ckpt, device)     # exported policy (normalizer baked in): also works for the official files
+    else:
+        runner_cls = load_runner_cls(task) or MjlabOnPolicyRunner
+        runner = runner_cls(env, asdict(agent_cfg), device=device)
+        runner.load(ckpt, load_cfg={"actor": True}, strict=True, map_location=device)
+        policy = runner.get_inference_policy(device=device)
     env.seed(seed)
     torch.manual_seed(seed)
     return env, policy
+
+
+class OnnxPolicy:
+    """Run an exported [1,61]->[1,14] (or batched) ONNX policy on the CPU for every env."""
+
+    def __init__(self, path: str, device: str):
+        import onnxruntime as ort
+        self.sess = ort.InferenceSession(path, providers=["CPUExecutionProvider"])
+        inp = self.sess.get_inputs()[0]
+        self.in_name, self.device = inp.name, device
+        self.batched = not (isinstance(inp.shape[0], int) and inp.shape[0] == 1)
+        print(f"[battery] ONNX policy {path}: input {inp.name} {inp.shape}, batched={self.batched}")
+
+    def __call__(self, obs):
+        x = obs["actor"] if "actor" in obs.keys() else obs["policy"]
+        a = x.detach().cpu().numpy().astype("float32")
+        if self.batched:
+            try:
+                y = self.sess.run(None, {self.in_name: a})[0]
+            except Exception:
+                self.batched = False
+        if not self.batched:
+            import numpy as np
+            y = np.concatenate([self.sess.run(None, {self.in_name: a[i:i + 1]})[0] for i in range(a.shape[0])], 0)
+        return torch.as_tensor(y, device=self.device)
 
 
 class Duck:
