@@ -18,7 +18,7 @@ iterations (24 env-steps each). Checkpoints every 250 iterations.
 | 2026-10-11 11:04 → 14:32 | **`velstand` v2** (walk + get-up) | `Mjlab-VelStand-Flat-MicroDuck` | 4096 | 6 000 | 1 h 30 + 1 h 50 (the PC went to sleep at iteration 2 784; resumed from `model_2750.pt` at 12:42, curricula continued) | warm start from `first-walk/model_10000.pt`, expert = teacher v2 `model_7498.pt`. **Gets up straight**: walking pushes down 5/8, back up 5/5 within ≈ 1 s at pitch 1–3°; standing pushes down 0/8. `recovery_success` 0.018 (v1: 0.003). Lost the tilt tracking v1 had (10° → 3.6°) — see the body-pose section |
 | 2026-10-11 14:35 → 17:50 | **`velstand` v3** (rough + backlash) | `Mjlab-VelStand-Rough-Backlash-MicroDuck` | 4096 | 3 000 | **3 h 15 min**, 3.7 s/iteration (2.2× the flat task) | warm start from v2 `model_5999.pt`, same teachers. On the flat test scene: standing pushes down 2/8, walking (0.14 m/s) down 6/8, upright 8/8 both, get-ups straight (pitch 1–2°). Sweep → **use `model_2500`** (drift −0.01; 2999 −0.16). `recovery_success` 0.019 |
 | 2026-10-11 17:53 → 19:11 | **`microduck_stand` v3** (body-wide) | `Mjlab-StandUp-Flat-MicroDuck` + `MICRODUCK_STANDUP_STRAIGHT=1` + `MICRODUCK_BODY_WIDE=1` | 4096 | 3 000 | 1 h 18 min, warm start from `model_7498.pt` | **stands straight (0.4°) and tracks the body command**: crouch −30 mm → −28.9 mm, pitch ±10° → 9.9 / −8.8°, ±20° → 19.5 / −19.3°, roll ±10° → 9.6 / −9.4°, raise +20 mm → +12.5 mm (teacher v2: −2 mm, 3°). `body_pose_tracking` 3.25 of 4 |
-| 2026-10-11 19:13 → | **`velstand` v4** (body-wide) | `Mjlab-VelStand-Rough-Backlash-MicroDuck` + `MICRODUCK_BODY_WIDE=1` | 4096 | 3 000, **running** | warm start from v3 `model_2999.pt`, expert = teacher v3, anchor = walk | the stand expert now teaches the crouch frames too (`body_no_teacher_axes = ()`) |
+| 2026-10-11 19:13 → 22:50 | **`velstand` v4** (body-wide) | `Mjlab-VelStand-Rough-Backlash-MicroDuck` + `MICRODUCK_BODY_WIDE=1` | 4096 | 3 000 | 3 h 37 min (GPU shared with the evaluation runs) | warm start from v3 `model_2999.pt`, expert = teacher v3. **Battery: crouch −28.6 mm, tilt ±10 / ±20° tracked, push recovery 94–98 %** (v2: 76–87 %), get-up 98–100 % — see the v4 section |
 
 ## `microduck_stand` — iteration 500 check (2026-10-11 00:12)
 
@@ -407,6 +407,48 @@ Reading, and two corrections to earlier sections:
    with the battery's tracking trial, not the viewer; pipeline part 4 still uses the viewer sweep
    (it was launched before this), so its picks will be re-checked with the battery afterwards.
 
+## VelStand v4: body commands inside the walk + get-up network (2026-10-11 23:00)
+
+3 000 iterations on `Mjlab-VelStand-Rough-Backlash-MicroDuck` from v3's last checkpoint, with
+`MICRODUCK_BODY_WIDE=1` (ranges ±20° / −40 … +20 mm, tracking weight 3.0) and the stand-up teacher v3
+teaching **all** body-command frames, crouch included (`body_no_teacher_axes = ()`). Battery, Flat
+environment, 256 envs, seed 0, `model_2999`:
+
+| | v2 `5750` | **v4 `2999`** | official v7 |
+|---|---|---|---|
+| get-up face-down / face-up / on-side | 99 / 93 / 93 % | **100 / 98 / 99 %** (0.28 / 0.64 / 0.68 s) | 100 / 93 / 95 % |
+| end pitch after a get-up | −0.1° | 1.2–1.3° | 0.1–0.3° |
+| push 1.0 / 1.2 m/s standing: recovered of fallen | 87 / 76 % | **94 / 98 %** | 92 / 92 % |
+| push 1.0 / 1.2 m/s walking: recovered of fallen | 84 / 86 % | **94 / 97 %** | 94 / 93 % |
+| median recovery time | 1.0–1.1 s | 0.9–1.1 s | 1.1–1.2 s |
+| walk 0.15 / 0.30 / 0.45 m/s | 0.09 / 0.18 / 0.25 | 0.06 / 0.18 / 0.24 | 0.02 / 0.14 / 0.22 |
+| yaw drift at 0.30 / 0.45 (p90) | −0.04 / −0.04 (0.17 / 0.19) | +0.01 / −0.07 (0.17 / 0.23) | +0.05 / −0.03 (0.15 / 0.17) |
+| turn +0.3 / +0.6 / +1.0 / −1.0 rad/s | 0.02 / 0.46 / 0.91 / −1.00 | 0.00 / 0.40 (p50 0.59) / 1.09 / −0.91 | 0.00 / 0.05 / 0.39 / −0.34 |
+| crouch −30 mm / raise +20 mm | −0.4 / +1.1 mm | **−28.6 / +8.0 mm** | −0.6 / +0.3 mm |
+| roll +10 / −10° | +1.9 / −1.3° | **+10.2 / −9.1°** | +7.8 / −7.9° |
+| pitch +10 / −10 / +20 / −20° | +3.7 / −2.5 / +4.2 / −2.0° | **+10.2 / −9.6 / +20.4 / −19.0°** | +9.9 / −6.2 / +16.9 / −15.4° |
+
+Reading:
+
+- **Body commands work in the full policy now**: crouch to within 1.4 mm of the command, roll and
+  pitch to within 1° at ±10° and ±20°. The official v7 tracks pitch and roll at ±10° (less in the
+  negative pitch direction) and does not crouch. This is the first row in the comparison where
+  ours is ahead *and* the official has nothing — and it came from the teacher's rewards, not from
+  any VelStand change.
+- **Push recovery jumped** from 76–87 % (v2) to 94–98 %, above the official 92–94 %. Three things
+  changed between v2 and v4 (rough terrain + backlash training in v3, the new teacher, the body
+  frames), so this is not attributable to one of them — it is also the number the protective-fall
+  round was supposed to move, and it has moved before that round started. The 1.2 m/s standing case,
+  76 % in v2, is 98 %.
+- Costs: get-ups end at 1.2–1.3° pitch instead of 0° (fine, but visible in the number), the 0.15 m/s
+  command is tracked worse (0.06 vs 0.09 m/s) while 0.30 / 0.45 are unchanged, and in-place turning
+  at 0.6 rad/s is bimodal (mean 0.40, per-env median 0.59: most ducks turn, some do not).
+- Training curves at 2 999: `body_pose_tracking` 0.38, `expert_bc_body_teach_frac` loss 0.12,
+  `recovery_success` 0.022 (v2: 0.018).
+
+Pipeline part 4 (turning) started from this checkpoint at 22:54: viewer sweep of v4, walk teacher
+v2 with `MICRODUCK_TURN=1`, sweep, VelStand v5, tests; its picks will be re-checked with the battery.
+
 ## Official policies measured with the same battery (2026-10-11 21:30)
 
 Downloaded from the Hugging Face repo `pollen-robotics/microduck-policies` (main, 2026-10-11) into
@@ -569,8 +611,7 @@ sweep → push tests and all three probes on the pick. Checkpoints are now chose
    ~~Teacher v3 (body-wide): straight + tracks crouch / tilt?~~ Yes: −29 mm, ±20°, ±10° roll.
 3. ~~VelStand v2 (Flat, 6 000) with the new teacher; posture probe + push tests; compare with v1.~~ Done: stands up straight.
 4. ~~VelStand v3 (Rough-Backlash, 3 000) warm-started from v2; push tests.~~ Done, pick 2500.
-5. Body-pose round (pipeline part 3, queued): teacher v3 + VelStand v4 with crouch / tilt that
-   actually track; then a protective-fall round (tuck the head, land softly) in the teacher.
+5. ~~Body-pose round (pipeline part 3): teacher v3 + VelStand v4 with crouch / tilt that actually track.~~ Done: v4 crouches 29 mm, tilts ±20°, push recovery 94–98 %.
 6. Turning round (pipeline part 4, queued): walk teacher v2 with the yaw fixes, sweep, VelStand v5 anchored to it.
 7. ~~Fixed-seed, batched evaluation battery~~ Done (first version; impact forces and ONNX input still to add) — the regression test for every later round.
 8. ~~The official policies measured with the same battery.~~ Done: walk, walk+get-up and stand-up teachers, all in the README.
