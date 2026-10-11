@@ -372,4 +372,10 @@ sweep → push tests and all three probes on the pick. Checkpoints are now chose
 5. Body-pose round (pipeline part 3, queued): teacher v3 + VelStand v4 with crouch / tilt that
    actually track; then a protective-fall round (tuck the head, land softly) in the teacher.
 6. Turning round (pipeline part 4, queued): walk teacher v2 with the yaw fixes, sweep, VelStand v5 anchored to it.
-7. Per-spawn-type get-up battery (fixed seed, batched), README get-up sequence, release of the ONNX files.
+7. Fixed-seed, batched evaluation battery (get-up per spawn type, push falls while walking, speed /
+   yaw tracking, impact forces per body part); then measure the walking-speed curve (0.15 / 0.30 /
+   0.45 m/s commands) of our policies and of the official walk ONNX with the same probe.
+8. Speed round: walk teacher v3 (additive fine linear-velocity term, more high-speed commands) →
+   VelStand v6 = new anchor + protective-fall (head impact) rewards, judged by separate metrics.
+9. Ablation of the stand-straight fix (one change at a time from `model_5999.pt`).
+10. Release of the ONNX files with config + sha256 per round; README get-up sequence.
