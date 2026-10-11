@@ -13,6 +13,7 @@ iterations (24 env-steps each). Checkpoints every 250 iterations.
 | 2026-10-10 | smoke | `Mjlab-VelStand-Flat-MicroDuck` | 64 | — | 14 s | **failed**: wandb 403 on the private teacher checkpoints |
 | 2026-10-10 23:57 → 10-11 02:28 | **`microduck_stand`** (stand-up teacher) | `Mjlab-StandUp-Flat-MicroDuck` | 4096 | 6 000 (last checkpoint `model_5999.pt`) | **2 h 30 min**, 1.42–1.5 s/iteration, 25 checkpoints | push test below: 4500 and 5999 get up 8/8, 3000 sits 8/8 |
 | 2026-10-11 02:41 → 04:16 | **`velstand`** (walk + get-up) | `Mjlab-VelStand-Flat-MicroDuck` | 4096 | 3 000 (last checkpoint `model_2999.pt`) | **1 h 35 min**, 1.70 s/iteration, 13 checkpoints | warm start from `first-walk/model_10000.pt`, expert `microduck_stand/model_5999.pt`, anchor `model_10000.pt`; **gets up 8/8 standing and 8/8 walking** — push tests below |
+| 2026-10-11 07:59 → | **`microduck_stand` v2** (stand straight) | `Mjlab-StandUp-Flat-MicroDuck` + `MICRODUCK_STANDUP_STRAIGHT=1` | 4096 | 1 500 max, **running** | warm start from `model_5999.pt` | fixes the lean basin below: upright_sharp 5.0 (curriculum pinned), composite upright_std 0.25, head_pose_tracking 2.0 / fine_std 0.15 |
 
 ## `microduck_stand` — iteration 500 check (2026-10-11 00:12)
 
@@ -111,9 +112,42 @@ Training curves for this run are misleading on their own: `expert_bc_fallen_frac
 and `recovery_success` at ≈0.003 for most of the run, because 45 % of episodes start prone and
 `topple_push` ramps to 1.2 m/s — the policy spends most of its time on the ground *by design*.
 
+
+## Posture probe: the get-up ends in a lean, not a stand (2026-10-11 07:5x)
+
+Measured with the viewer's `--debug` output (projected gravity → trunk pitch, joint angles relative
+to the default standing pose), one line per second, pushes injected through tmux:
+
+| policy | before any push | after a push |
+|---|---|---|
+| `first_walk_10000` (walk) | z 0.117 m, pitch 1°, joints ≈ default | falls, stays down |
+| `standup_5999` (teacher) | z 0.116, pitch 0°, joints ≈ default | **z 0.115, pitch 34°, neck_pitch −110° (joint limit), legs ≈ default — and it stays there** |
+| `standup_4500` (teacher) | same | same lean, 34° / −110° |
+| `velstand_2999` | z 0.117, pitch 1° | after a get-up: **pitch 35°, neck −110°**; after a later push it happened to return to 1° |
+
+So "gets up" in the push tests meant "trunk back at standing height" — the policy stands at the
+right height but pitched 34° forward with the head tucked into the chest, and never straightens.
+The StandUp config even names this attractor: the *lean basin* ("lean trunk at the right
+height"). Two things in the stock recipe let it win here:
+
+1. `upright_sharp` (Gaussian on tilt, gated by height) is **faded by a curriculum**:
+   1.5 → 1.0 at iteration 3000 → 0.5 at 4000. By the time the get-up skill exists, standing
+   vertical pays almost nothing extra; `standing_composite` (upright_std 0.40 ≈ 23°) still gives
+   ~0.3 at 34°, `height_stand*` are fully paid, and the head-pose term (std 0.5 rad) barely prices a
+   tucked neck.
+2. VelStand inherits the pose through the expert BC and sits exactly in the gap between its two
+   teachers: the walk anchor covers tilt < 25°, the stand expert tilt > 35°. At 34° nobody teaches,
+   and `RECOVERED_UP_TILT_DEG = 25` means the recovery bounty never fires — which is why
+   `recovery_success` stayed ≈ 0.003 all run.
+
+Fix (teacher side, [`patches/standup-stand-straight.patch`](../patches/standup-stand-straight.patch),
+enabled with `MICRODUCK_STANDUP_STRAIGHT=1`): `upright_sharp` weight 5.0 with std 0.2 and the fade
+curriculum pinned at 5.0; `standing_composite` upright_std 0.25; `head_pose_tracking` weight 2.0 with
+`fine_std` 0.15. Fine-tune from `model_5999.pt` with `MICRODUCK_WARM_START=1`, 1 500 iterations.
+Then VelStand gets re-trained with the new teacher. Results below when they are in.
+
 ## Next
 
-1. Walk sweep for `velstand_2999` vs `first_walk_10000` (0.3 / 0.4 m/s tracking, yaw drift) and a
-   per-spawn-type get-up battery (face-down / face-up / side).
-2. Screenshots of a get-up sequence for the README.
-3. Publish `velstand_2999.onnx` to the Hugging Face Hub with `uv run publish`.
+1. StandUp v2 (running) → posture probe: does it end at pitch ≈ 0° after a push?
+2. VelStand v2 with the new teacher; posture probe + push tests; compare with v1.
+3. Walk sweep, per-spawn-type get-up battery, README get-up sequence, Hub publish.

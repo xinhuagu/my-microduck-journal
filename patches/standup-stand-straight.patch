@@ -1,0 +1,33 @@
+diff --git a/src/mjlab_microduck/tasks/microduck_standup_env_cfg.py b/src/mjlab_microduck/tasks/microduck_standup_env_cfg.py
+index 358b567c..727540a0 100644
+--- a/src/mjlab_microduck/tasks/microduck_standup_env_cfg.py
++++ b/src/mjlab_microduck/tasks/microduck_standup_env_cfg.py
+@@ -19,6 +19,7 @@ the ground_state_mix recovery curriculum has finished ramping.
+ """
+ 
+ import math
++import os
+ from copy import deepcopy
+ 
+ # Symmetry
+@@ -1114,6 +1115,20 @@ def make_microduck_standup_env_cfg(
+         },
+     )
+ 
++    # Local tweak (my-microduck-journal): the teacher trained with the stock weights settles
++    # in the "lean basin" after every get-up (trunk pitched ~34 deg, neck at its -110 deg limit,
++    # z at STAND_Z). MICRODUCK_STANDUP_STRAIGHT=1 makes the final pose pay for being vertical:
++    # sharper/heavier upright terms and a head-pose term that prices the tucked neck.
++    if os.environ.get("MICRODUCK_STANDUP_STRAIGHT"):
++        cfg.rewards["upright_sharp"].weight = 5.0
++        cfg.rewards["upright_sharp"].params["std"] = 0.2
++        cfg.rewards["standing_composite"].params["upright_std"] = 0.25
++        cfg.rewards["head_pose_tracking"].weight = 2.0
++        cfg.rewards["head_pose_tracking"].params["fine_std"] = 0.15
++        # the stock curriculum fades upright_sharp 1.5 -> 1.0 (iter 3000) -> 0.5 (iter 4000); keep it at 5.0
++        cfg.curriculum["upright_sharp_weight"].params["weight_stages"] = [{"step": 0, "weight": 5.0}]
++        print("[standup] MICRODUCK_STANDUP_STRAIGHT: upright_sharp w=5.0 std=0.2, composite upright_std=0.25, head_pose_tracking w=2.0 fine_std=0.15")
++
+     return cfg
+ 
+ 
