@@ -20,7 +20,7 @@ iterations (24 env-steps each). Checkpoints every 250 iterations.
 | 2026-10-11 17:53 → 19:11 | **`microduck_stand` v3** (body-wide) | `Mjlab-StandUp-Flat-MicroDuck` + `MICRODUCK_STANDUP_STRAIGHT=1` + `MICRODUCK_BODY_WIDE=1` | 4096 | 3 000 | 1 h 18 min, warm start from `model_7498.pt` | **stands straight (0.4°) and tracks the body command**: crouch −30 mm → −28.9 mm, pitch ±10° → 9.9 / −8.8°, ±20° → 19.5 / −19.3°, roll ±10° → 9.6 / −9.4°, raise +20 mm → +12.5 mm (teacher v2: −2 mm, 3°). `body_pose_tracking` 3.25 of 4 |
 | 2026-10-11 19:13 → 22:50 | **`velstand` v4** (body-wide) | `Mjlab-VelStand-Rough-Backlash-MicroDuck` + `MICRODUCK_BODY_WIDE=1` | 4096 | 3 000 | 3 h 37 min (GPU shared with the evaluation runs) | warm start from v3 `model_2999.pt`, expert = teacher v3. **Battery: crouch −28.6 mm, tilt ±10 / ±20° tracked, push recovery 94–98 %** (v2: 76–87 %), get-up 98–100 % — see the v4 section |
 | 2026-10-11 22:59 → 00:05 | **`velocity` walk teacher v2** (turn) | `Mjlab-Velocity-Flat-MicroDuck` + `MICRODUCK_TURN=1` | 4096 | 3 000 | 1 h 06 min, warm start from `first-walk/model_10000.pt` | pipeline part 4. Viewer sweep → `model_1750` (drift −0.02). **Battery: turns better (0.6 → 0.65, ±1.0 → 1.09 / −1.07, drift p90 0.08) but walks slower (0.30 → 0.14 m/s, was 0.20); 0.3 rad/s still 0.08** |
-| 2026-10-12 00:14 → | **`velstand` v5** (turn + body-wide) | `Mjlab-VelStand-Rough-Backlash-MicroDuck` + `MICRODUCK_TURN=1` + `MICRODUCK_BODY_WIDE=1` | 4096 | 3 000, **running** | warm start from v4 `model_2500`, expert = teacher v3, anchor = walk v2 `model_1750` | the only change against v4 is the walk anchor (and the turn sampling); speed is at risk, see below |
+| 2026-10-12 00:14 → 00:31 | **`velstand` v5** (turn + body-wide) | `Mjlab-VelStand-Rough-Backlash-MicroDuck` + `MICRODUCK_TURN=1` + `MICRODUCK_BODY_WIDE=1` | 4096 | **253 of 3 000, stopped** (PC shut down for the night; last checkpoint `model_250.pt`, run `2026-10-12_00-14-51_velstand`) | warm start from v4 `model_2500`, expert = teacher v3, anchor = walk v2 `model_1750` | resumes with `--agent.resume True --agent.load-run 2026-10-12_00-14-51_velstand --agent.load-checkpoint model_250.pt --agent.max-iterations 2750` (plain resume, curricula continue) — [`scripts/pipeline_round3b_resume_v5.sh`](../scripts/pipeline_round3b_resume_v5.sh) |
 
 ## `microduck_stand` — iteration 500 check (2026-10-11 00:12)
 
@@ -476,8 +476,14 @@ policy's level. A quarter of the environments now practise turning in place, and
 rewards standing still at zero yaw while walking, so the gait got "lazier" forward — a trade-off the
 speed round will have to pay back (it was already the next item).
 
-Consequence for v5 (running since 00:14, anchored to this teacher): turning should carry over,
-speed may drop from v4's 0.18 m/s; the battery tomorrow decides, three columns (v4, v5, official).
+Consequence for v5 (anchored to this teacher): turning should carry over, speed may drop from v4's
+0.18 m/s; the battery decides, three columns (v4, v5, official).
+
+**Stopped at 00:31** at iteration 253 (checkpoint `model_250.pt`) because the PC was shut down for
+the night; nothing else was running. Resume script: `scripts/pipeline_round3b_resume_v5.sh` (plain
+resume for the remaining 2 750 iterations, then the sweep, push tests and probes of part 4's step Q).
+Next morning, in order: resume v5 → battery on the v5 pick → v4 / v5 / official three-column table →
+first GitHub Release (v4 and v5 ONNX + config + sha256).
 
 ## Official policies measured with the same battery (2026-10-11 21:30)
 
