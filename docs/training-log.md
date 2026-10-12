@@ -519,6 +519,34 @@ of the range) plus an additive fine linear-velocity term and more high-speed com
 both numbers before any distillation; the 0.3 rad/s dead zone goes to the runtime command remap
 unless that teacher opens it.
 
+## The navigation layer: fall, get up, walk to a goal, stop (2026-10-13 00:20)
+
+The policy only follows velocity commands. A task — "go there" — needs a layer above it that turns
+(position, heading, goal) into those commands every step. It is 20 lines (`goal_controller` in
+[`scripts/eval_battery.py`](../scripts/eval_battery.py)): heading error above 0.6 rad → turn at
+0.8 rad/s (well above the 0.3 rad/s dead zone) while keeping 0.15 m/s of forward speed when far
+from the goal, because yaw is tracked better while stepping than in place; otherwise walk at
+0.2–0.3 m/s with a proportional yaw correction; inside 10 cm → zero command, the policy stands.
+Falls need no special handling: the controller keeps commanding, the policy gets up and continues.
+
+As a trial in the battery (`--only goal`): every duck gets a goal 1.5 m away in a random direction,
+30 s to get there, in one variant a 1.0 m/s push after 2 s. Reached = inside 10 cm for one continuous
+second. First numbers, 64 envs, seed 0 (the 256-env, three-seed version goes into the benchmark table):
+
+| 1.5 m goal | v4: reached, median | v5: reached, median | official v7: reached, median |
+|---|---|---|---|
+| no push | **100 %, 9.7 s** | 100 %, 13.9 s | 98 %, 13.8 s (p90 20.1 s) |
+| push 1.0 m/s at 2 s (91–98 % fall) | **94 %, 12.4 s** | 89 %, 15.9 s | 94 %, 16.8 s (p90 22.5 s) |
+| final distance / stop drift | 0.08 m / 0 cm | 0.09 m / 0 cm | 0.09 m / 0 cm |
+
+Reading: all three get there without a push; after a push v4 and the official policy recover and
+finish 94 % of the time, v5 89 %. Speed decides the time: v4 (0.18 m/s) arrives in 10–12 s, v5
+and the official policy (0.12–0.14 m/s) in 14–17 s with a long tail for the official one, whose
+weak in-place turning makes the controller circle. Stopping is clean on all three (no drift inside
+the tolerance). A first version of the controller turned purely in place and stalled on 9 % of
+ducks (49 % on the official policy); keeping a little forward speed while turning removed that —
+one more place where the turning dead zone shows up.
+
 ## Official policies measured with the same battery (2026-10-11 21:30)
 
 Downloaded from the Hugging Face repo `pollen-robotics/microduck-policies` (main, 2026-10-11) into
