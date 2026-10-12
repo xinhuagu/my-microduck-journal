@@ -27,6 +27,7 @@ ANCHOR="${ANCHOR:-logs/rsl_rl/velocity/2026-09-07_20-38-41_first-walk/model_1000
 mkdir -p scripts_local && cp "$S/eval_battery.py" scripts_local/eval_battery.py
 OUTARG=(); [ -n "$OUT" ] && OUTARG=(--out "$OUT")
 [ -n "$NAME" ] && OUTARG+=(--name "$NAME")
+[ -n "${VIDEO:-}" ] && OUTARG+=(--video "$VIDEO" --video-steps "${VIDEO_STEPS:-1700}")   # env VIDEO=<folder> records env 0
 MICRODUCK_STAND_EXPERT="$EXPERT" MICRODUCK_WALK_ANCHOR="$ANCHOR" \
 uv run python scripts_local/eval_battery.py --task "$TASK" --checkpoint "$CKPT" --num-envs "$N" --only "$ONLY" --seeds "$SEEDS" "${OUTARG[@]}" 2>&1 \
   | grep -vE "DeprecationWarning|warnings.warn|UserWarning|tyro/_parsers"

@@ -36,10 +36,14 @@ DOWN_Z = 0.090           # "went down" threshold (same as the viewer push test)
 
 
 # ----------------------------------------------------------------------------- env + policy
-def build(task: str, ckpt: str, num_envs: int, seed: int, device: str, episode_s: float = 60.0):
+def build(task: str, ckpt: str, num_envs: int, seed: int, device: str, episode_s: float = 60.0,
+          video: str | None = None, video_steps: int = 1700):
     configure_torch_backends()
     env_cfg = load_env_cfg(task, play=True)
     agent_cfg = load_rl_cfg(task)
+    if video:   # close tracking camera on env 0, 720p, recorded from the first step for `video_steps` steps
+        v = env_cfg.viewer
+        v.distance, v.elevation, v.azimuth, v.height, v.width, v.max_extra_envs = 1.2, -20.0, 135.0, 720, 1280, 0
     # No surprise pushes during a trial: interval events stay registered (curricula may reference them) but never
     # fire; curricula are dropped (evaluation only); keep only the time-out termination.
     for v in env_cfg.events.values():
@@ -50,7 +54,11 @@ def build(task: str, ckpt: str, num_envs: int, seed: int, device: str, episode_s
     env_cfg.episode_length_s = episode_s
     env_cfg.scene.num_envs = num_envs
     env_cfg.seed = seed
-    env = ManagerBasedRlEnv(cfg=env_cfg, device=device, render_mode=None)
+    env = ManagerBasedRlEnv(cfg=env_cfg, device=device, render_mode="rgb_array" if video else None)
+    if video:
+        from mjlab.utils.wrappers import VideoRecorder
+        env = VideoRecorder(env, video_folder=video, step_trigger=lambda step: step == 0,
+                            video_length=video_steps, disable_logger=True)
     env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
     if ckpt.endswith(".onnx"):
         policy = OnnxPolicy(ckpt, device)     # exported policy (normalizer baked in): also works for the official files
@@ -420,7 +428,8 @@ def trial_goal(duck: Duck, seconds: float = 30.0, push_speed: float = 1.0, push_
     """Walk to a goal GOAL_DIST away in a random direction; one variant with a push at push_at_s."""
     tw = duck.cm.get_term("twist")
     rows = []
-    for with_push in (False, True):
+    variants = (True,) if os.environ.get("BATTERY_GOAL_PUSH_ONLY") else (False, True)
+    for with_push in variants:
         duck.spawn("upright")
         duck.set_twist(0, 0, 0, standing=True)
         duck.rollout(1.0)
@@ -583,6 +592,8 @@ def main():
     ap.add_argument("--device", default="cuda:0")
     ap.add_argument("--only", default="getup,push,tracking,body")
     ap.add_argument("--out", default=None)
+    ap.add_argument("--video", default=None, help="folder: record env 0 (720p, close camera) from the first step")
+    ap.add_argument("--video-steps", type=int, default=1700, help="recorded steps (50 per second)")
     a = ap.parse_args()
     t0 = time.time()
     seeds = [int(x) for x in a.seeds.split(",")] if a.seeds else [a.seed]
@@ -590,7 +601,7 @@ def main():
     name = a.name or os.path.basename(a.checkpoint)
     per_seed = []
     for seed in seeds:
-        env, policy = build(a.task, a.checkpoint, a.num_envs, seed, a.device)
+        env, policy = build(a.task, a.checkpoint, a.num_envs, seed, a.device, video=a.video, video_steps=a.video_steps)
         duck = Duck(env, policy, seed)
         print(f"\n[battery] {name}  task={a.task}  envs={a.num_envs}  seed={seed}  dt={duck.dt:.3f}s  (setup {time.time()-t0:.0f} s)")
         res = run_trials(duck, only)
