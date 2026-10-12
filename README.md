@@ -67,6 +67,16 @@ while the same GPU keeps training. Each duck starts an episode on the ground and
 | Release | ✅ v0.1 | `velstand_v4.onnx` + v5 variant + teachers + evaluation JSONs + checksums — [releases/tag/v0.1](https://github.com/xinhuagu/my-microduck-journal/releases/tag/v0.1) |
 | Turning (`patches/turn.patch`) | 🔄 partial | A walk teacher trained with slow in-place turns and a yaw-only fine term turns 0.6 rad/s → 0.65 and ±1.0 symmetrically with a third of the yaw drift, and VelStand v5 anchored to it inherits that — at the cost of walking speed (0.30 → 0.12 m/s). The 0.3 rad/s dead zone is unchanged. Next walk teacher has to be fast and turn — see [docs/training-log.md](docs/training-log.md#velstand-v5-the-turning-anchor-measured-2026-10-12-2200) |
 
+## Fall, get up, walk to the goal, stop
+
+![VelStand v4: pushed over while walking to a goal 1.5 m away, gets up, continues, stops inside 10 cm](results/goal-v4-push-getup-walk-stop.gif)
+
+*One duck, policy v4, recorded by the evaluation script: a goal 1.5 m away, a 1.0 m/s push after
+2 s, up again in about a second, on target at 8.4 s, then standing still. The navigation layer is
+20 lines on top of the policy (heading error → turn, distance → speed, inside 10 cm → stop); the
+policy itself only sees velocity commands. Over 256 ducks × 3 seeds, v4 reaches the goal 100 % of
+the time unpushed and 96 % after the push — see the benchmark's goal columns.*
+
 ## Benchmark
 
 [`docs/benchmark.md`](docs/benchmark.md) is one fixed exam for every policy that speaks the
