@@ -63,9 +63,28 @@ while the same GPU keeps training. Each duck starts an episode on the ground and
 | Walking policy (`Mjlab-Velocity-Flat-MicroDuck`) | ✅ trained | 4096 envs × 10 000 iterations, all 41 checkpoints exported to ONNX — see [docs/training-log.md](docs/training-log.md) |
 | Fall recovery (`Mjlab-VelStand-*`) | ✅ trained | The official recipe distils a stand-up expert from a **private** wandb project (HTTP 403), so a `StandUp` teacher was trained here first (6 000 iterations, 2 h 30) and VelStand warm-started from the walk policy with local teachers (3 000 iterations, 1 h 35). 8-push smoke test (1 m/s, random direction, 6 s window): v1 went **down 1/8 standing, 5/8 walking** and was back above 100 mm trunk height **every time it went down** (the walk policy alone stays down 8/8) — but v1 "stands" pitched 34° forward with the head tucked (the teacher's lean basin). Recovery took 1–3 s in the posture probe. Not yet done: a fixed-seed battery per spawn type (face-down / face-up / side) with recovery time and final posture. Teacher v2 with stronger upright rewards (13 500 iterations in total) ends every get-up at pitch ≈ 0°. **VelStand v2** (6 000 iterations with that teacher): walking pushes down 5/8, back up 5/5 within ≈ 1 s **at pitch 1–3°**, standing pushes down 0/8. Checkpoint to use: `model_5750`, picked by a walk sweep (yaw drift 0.02 rad/s at 0.30 m/s; the last checkpoint, 5999, veers at 0.47 — see the turning section of the log). v3 continues it on rough terrain with actuator backlash (3 000 iterations; on flat: walking pushes down 6/8, up 6/6, pick `model_2500`) — see [docs/velstand-without-private-teachers.md](docs/velstand-without-private-teachers.md) and [docs/training-log.md](docs/training-log.md) |
 | Body-pose commands (crouch / tilt while standing) | ✅ trained | Measured first: neither the walk+get-up policy nor the teacher crouched, and tilt tracked only to ~10°. With the teacher's fixed-pose rewards made command-relative ([`patches/body-wide.patch`](patches/body-wide.patch)), teacher v3 crouches and tilts; **VelStand v4** distilled from it crouches −28.6 mm for −30, tracks roll / pitch to within 1° at ±10° and ±20°, and recovers 94–98 % of push falls — see [docs/training-log.md](docs/training-log.md#velstand-v4-body-commands-inside-the-walk--get-up-network-2026-10-11-2300) |
-| Evaluation battery (256 envs, fixed seed) | ✅ first statistics | VelStand v2: get-up 93–99 % from face-down / face-up / on-side, median 0.3–0.7 s, straight at the end; push falls recovered 76–95 % (0.6–1.2 m/s); 0.30 m/s command → 0.18 m/s; in-place turn 0.3 / 0.6 / 1.0 rad/s → 0.02 / 0.46 / 0.91 — see [docs/training-log.md](docs/training-log.md#evaluation-battery-first-statistics-2026-10-11-2110) |
+| Benchmark (256 envs × 3 seeds, any ONNX) | ✅ published | 10 policies — official, own, community — through one exam; v4 level or ahead of the official v7 on every column — see [docs/benchmark.md](docs/benchmark.md) |
 | Release | ✅ v0.1 | `velstand_v4.onnx` + v5 variant + teachers + evaluation JSONs + checksums — [releases/tag/v0.1](https://github.com/xinhuagu/my-microduck-journal/releases/tag/v0.1) |
 | Turning (`patches/turn.patch`) | 🔄 partial | A walk teacher trained with slow in-place turns and a yaw-only fine term turns 0.6 rad/s → 0.65 and ±1.0 symmetrically with a third of the yaw drift, and VelStand v5 anchored to it inherits that — at the cost of walking speed (0.30 → 0.12 m/s). The 0.3 rad/s dead zone is unchanged. Next walk teacher has to be fast and turn — see [docs/training-log.md](docs/training-log.md#velstand-v5-the-turning-anchor-measured-2026-10-12-2200) |
+
+## Benchmark
+
+[`docs/benchmark.md`](docs/benchmark.md) is one fixed exam for every policy that speaks the
+Microduck contract — 256 randomised ducks, three seeds, forced spawns, pushes and commands — and
+[`scripts/eval_battery.py`](scripts/eval_battery.py) runs it on any `.onnx` in one command. Official,
+own and community policies, same numbers, same code path (headline columns; the full table and the
+raw JSON are in the doc and in `results/benchmark/`):
+
+| policy | get-up | push 1.0 / 1.2 m/s recovered | speed at 0.30 | turn 0.6 / 1.0 rad/s | crouch −30 mm | pitch ±10° |
+|---|---|---|---|---|---|---|
+| official `velstand.onnx` (v7) | 96 % | 94 / 93 % | 0.14 m/s | 0.05 / 0.38 | −0.7 mm | 8.0° |
+| **ours v4** (release v0.1) | **99 %** | **95 / 97 %** | **0.18 m/s** | 0.39 / 1.10 | **−28.7 mm** | **10.0°** |
+| ours v5 (turning variant) | 95 % | 89 / 89 % | 0.12 m/s | **0.68 / 1.12** | −25.8 mm | 9.8° |
+| ours v2 | 97 % | 85 / 86 % | 0.18 m/s | 0.38 / 0.92 | −0.5 mm | 3.1° |
+
+```bash
+bash scripts/eval_battery.sh Mjlab-VelStand-Flat-MicroDuck my_policy.onnx 256 getup,push,tracking,body out.json 0,1,2 my_policy
+```
 
 ## Measured against the official policies
 
@@ -144,6 +163,7 @@ docs/
   pitfalls.md                       every problem hit so far, with the fix
   training-log.md                   one row per run: task, envs, iterations, time, outcome
   velstand-without-private-teachers.md   how to train fall recovery without the private wandb teachers
+  benchmark.md                      the policy benchmark: method, how to run it, results
 scripts/
   export_all.sh                     export every checkpoint of a run to ONNX
   run_viewer.sh / tmux_viewer.sh    CPU MuJoCo viewer with the right env vars (tmux variant takes injected keys)
@@ -159,6 +179,7 @@ scripts/
   bodypose_probe.sh                 commanded vs measured crouch / tilt
   turn_probe.sh / turn_sweep.sh     in-place yaw rate and straight-walk drift, per checkpoint
   eval_battery.py / .sh             batched, fixed-seed battery: get-up per spawn type, push falls, tracking, body commands
+  benchmark_all.sh / benchmark_table.py   run every policy through the battery (3 seeds) and build the table
   wslg_copymode.ps1                 check / fix the WSLg copy-mode blank window without wsl --shutdown
 patches/                            config diffs against upstream microduck_rl, applied in this order:
   velstand-local-teachers.patch     MICRODUCK_STAND_EXPERT / MICRODUCK_WALK_ANCHOR = local checkpoint paths

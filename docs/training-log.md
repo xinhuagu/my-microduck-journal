@@ -683,7 +683,7 @@ sweep → push tests and all three probes on the pick. Checkpoints are now chose
 4. ~~VelStand v3 (Rough-Backlash, 3 000) warm-started from v2; push tests.~~ Done, pick 2500.
 5. ~~Body-pose round (pipeline part 3): teacher v3 + VelStand v4 with crouch / tilt that actually track.~~ Done: v4 crouches 29 mm, tilts ±20°, push recovery 94–98 %.
 6. ~~Turning round (pipeline part 4): walk teacher v2 with the yaw fixes, sweep, VelStand v5 anchored to it.~~ Done: turning consistent, speed and push recovery down — v4 stays the release candidate.
-7. ~~Fixed-seed, batched evaluation battery~~ Done (first version; impact forces and ONNX input still to add) — the regression test for every later round.
+7. ~~Fixed-seed, batched evaluation battery~~ Done and published as the benchmark (docs/benchmark.md: 10 policies × 3 seeds, ONNX input, dynamic batching); impact forces still to add.
 8. ~~The official policies measured with the same battery.~~ Done: walk, walk+get-up and stand-up teachers, all in the README.
 9. ~~GitHub Release per round: ONNX files + config + sha256.~~ v0.1 published (2026-10-12 22:15): v4, v5 variant, teachers, eval JSONs, SHA256SUMS.
 10. Speed round: walk teacher v3 = milder turn bucket + fine linear-velocity term + more high-speed commands, judged on speed *and* turning; then VelStand v6 from v4 with that anchor (+ protective-fall rewards), judged by separate metrics.
