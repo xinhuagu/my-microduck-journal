@@ -23,6 +23,9 @@ COLS = [
     ("pitch_deg_for_10", "pitch ±10°", "deg"),
     ("pitch_deg_for_20", "pitch ±20°", "deg"),
     ("roll_deg_for_10", "roll ±10°", "deg"),
+    ("goal_reached_nopush", "goal 1.5 m reached", "pct"),
+    ("goal_reached_push", "goal reached after a 1.0 m/s push", "pct"),
+    ("goal_median_s_push", "goal median time (push)", "s"),
 ]
 
 

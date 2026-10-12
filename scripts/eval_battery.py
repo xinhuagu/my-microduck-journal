@@ -390,6 +390,88 @@ def trial_body(duck: Duck, seconds: float = 5.0):
     return rows
 
 
+# ----------------------------------------------------------------------------- goal reaching (navigation layer)
+GOAL_DIST = 1.5          # m from the spawn point, random bearing
+GOAL_TOL = 0.10          # m: "reached" when inside this for 1 s
+TURN_IN_PLACE_ERR = 0.6  # rad: heading error above which the controller turns in place
+TURN_RATE = 0.8          # rad/s: in-place turn command (well above the 0.3 rad/s dead zone)
+WALK_V = 0.30            # m/s forward command while far from the goal
+
+
+def goal_controller(dxy: torch.Tensor, heading: torch.Tensor) -> torch.Tensor:
+    """Per-env (vx, vy, wz) from the goal vector in the world frame and the robot heading.
+    Proportional in heading, bang-bang between turn-in-place and walking, stop inside the tolerance."""
+    dist = torch.linalg.norm(dxy, dim=1)
+    bearing = torch.atan2(dxy[:, 1], dxy[:, 0])
+    err = torch.remainder(bearing - heading + math.pi, 2 * math.pi) - math.pi      # wrap to [-pi, pi)
+    cmd = torch.zeros(dxy.shape[0], 3, device=dxy.device)
+    turn = (err.abs() > TURN_IN_PLACE_ERR) | ((dist < 0.3) & (err.abs() > 0.3))
+    walk = ~turn & (dist >= GOAL_TOL)
+    # Turning: keep a little forward speed while far from the goal (yaw is tracked better while stepping
+    # than in place, and a pure in-place turn can stall on policies with a turning dead zone).
+    cmd[turn, 0] = torch.where(dist[turn] > 0.5, torch.full_like(dist[turn], 0.15), torch.zeros_like(dist[turn]))
+    cmd[turn, 2] = TURN_RATE * torch.sign(err[turn])
+    cmd[walk, 0] = torch.clamp(0.8 * dist[walk], 0.2, WALK_V)
+    cmd[walk, 2] = torch.clamp(1.5 * err[walk], -0.8, 0.8)
+    return cmd
+
+
+def trial_goal(duck: Duck, seconds: float = 30.0, push_speed: float = 1.0, push_at_s: float = 2.0):
+    """Walk to a goal GOAL_DIST away in a random direction; one variant with a push at push_at_s."""
+    tw = duck.cm.get_term("twist")
+    rows = []
+    for with_push in (False, True):
+        duck.spawn("upright")
+        duck.set_twist(0, 0, 0, standing=True)
+        duck.rollout(1.0)
+        start = duck.robot.data.root_link_pos_w[:, :2].clone()
+        ang = torch.rand(duck.n, device=duck.dev, generator=duck.gen) * 2 * math.pi
+        goal = start + GOAL_DIST * torch.stack([torch.cos(ang), torch.sin(ang)], dim=1)
+        T = int(round(seconds / duck.dt)); hold = int(round(1.0 / duck.dt))
+        dist_hist, z_hist = [], []
+        for t in range(T):
+            pos = duck.robot.data.root_link_pos_w[:, :2]
+            heading = duck.robot.data.heading_w
+            cmd = goal_controller(goal - pos, heading)
+            tw.time_left[:] = 1e9
+            tw.is_standing_env[:] = cmd.abs().sum(1) < 1e-6
+            tw.vel_command_b[:] = cmd
+            if hasattr(tw, "vel_command_w"):
+                tw.vel_command_w[:] = cmd
+            if with_push and t == int(round(push_at_s / duck.dt)):
+                duck.push(push_speed)
+            duck.step()
+            m = duck.measure()
+            dist_hist.append(torch.linalg.norm(goal - duck.robot.data.root_link_pos_w[:, :2], dim=1))
+            z_hist.append(m["z"])
+        dist = torch.stack(dist_hist); z = torch.stack(z_hist)                     # (T, N)
+        inside = dist < GOAL_TOL
+        run = torch.zeros(duck.n, dtype=torch.long, device=duck.dev)
+        t_reach = torch.full((duck.n,), float("nan"), device=duck.dev)
+        for t in range(T):
+            run = torch.where(inside[t], run + 1, torch.zeros_like(run))
+            hit = (run == hold) & torch.isnan(t_reach)
+            t_reach[hit] = (t - hold + 1) * duck.dt
+        reached = ~torch.isnan(t_reach)
+        fell = (z < DOWN_Z).any(0)
+        last = slice(-int(round(2.0 / duck.dt)), None)
+        drift = (dist[last].max(0).values - dist[last].min(0).values)              # movement inside the last 2 s
+        rows.append({
+            "with_push": with_push, "push_mps": push_speed if with_push else 0.0, "n": duck.n,
+            "reached": float(reached.float().mean()),
+            "median_time_s": nanmedian(t_reach),
+            "p90_time_s": float(torch.quantile(t_reach[reached], 0.9)) if reached.any() else float("nan"),
+            "final_dist_m_median": float(dist[-1].median()),
+            "fell": float(fell.float().mean()),
+            "reached_of_fallen": float((reached & fell).float().sum() / max(int(fell.sum()), 1)) if with_push else float("nan"),
+            "stop_drift_m_median": float(drift[reached].median()) if reached.any() else float("nan"),
+            # diagnostics for the ones that did not make it: how far they ended up, and whether they were still moving
+            "failed_final_dist_m_median": float(dist[-1][~reached].median()) if (~reached).any() else float("nan"),
+            "failed_still_down": float(((z[last] < DOWN_Z).all(0) & ~reached).float().sum() / max(int((~reached).sum()), 1)) if (~reached).any() else float("nan"),
+        })
+    return rows
+
+
 # ----------------------------------------------------------------------------- main
 def run_trials(duck: Duck, only: set[str]) -> dict:
     out = {}
@@ -402,6 +484,8 @@ def run_trials(duck: Duck, only: set[str]) -> dict:
             out["tracking"] = trial_tracking(duck)
         if "body" in only:
             out["body"] = trial_body(duck)
+        if "goal" in only:
+            out["goal"] = trial_goal(duck)
     return out
 
 
@@ -438,6 +522,13 @@ def summarize(res: dict) -> dict:
             s["pitch_deg_for_20"] = (by["pitch +20"]["pitch_deg"] - by["pitch -20"]["pitch_deg"]) / 2
         if "roll +10" in by and "roll -10" in by:
             s["roll_deg_for_10"] = (by["roll +10"]["roll_deg"] - by["roll -10"]["roll_deg"]) / 2
+    g = res.get("goal")
+    if g:
+        for r in g:
+            tag = "push" if r["with_push"] else "nopush"
+            s[f"goal_reached_{tag}"] = r["reached"]
+            s[f"goal_median_s_{tag}"] = r["median_time_s"]
+            s[f"goal_stop_drift_m_{tag}"] = r["stop_drift_m_median"]
     return s
 
 
@@ -472,6 +563,13 @@ def print_tables(res: dict):
         print("\n| case | dz mm | roll ° | pitch ° | fell |\n|---|---|---|---|---|")
         for r in res["body"]:
             print(f"| {r['case']} | {r['dz_mm']:+.1f} | {r['roll_deg']:+.1f} | {r['pitch_deg']:+.1f} | {fmt_pct(r['fell'])} |")
+    if "goal" in res:
+        print(f"\n| goal {GOAL_DIST} m | reached | median s | p90 s | final dist (median) | fell | reached of fallen | stop drift (median) |\n|---|---|---|---|---|---|---|---|")
+        for r in res["goal"]:
+            label = f"push {r['push_mps']:.1f} m/s at 2 s" if r["with_push"] else "no push"
+            print(f"| {label} | {fmt_pct(r['reached'])} | {r['median_time_s']:.1f} | {r['p90_time_s']:.1f} | {r['final_dist_m_median']:.2f} m | {fmt_pct(r['fell'])} | {fmt_pct(r['reached_of_fallen']) if r['reached_of_fallen'] == r['reached_of_fallen'] else '—'} | {r['stop_drift_m_median']*100:.1f} cm |")
+            if r.get("failed_final_dist_m_median", float("nan")) == r.get("failed_final_dist_m_median", float("nan")):
+                print(f"    not reached: final distance median {r['failed_final_dist_m_median']:.2f} m, still down at the end {fmt_pct(r['failed_still_down'])}")
 
 
 def main():
