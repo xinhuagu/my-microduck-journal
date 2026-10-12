@@ -20,7 +20,7 @@ iterations (24 env-steps each). Checkpoints every 250 iterations.
 | 2026-10-11 17:53 → 19:11 | **`microduck_stand` v3** (body-wide) | `Mjlab-StandUp-Flat-MicroDuck` + `MICRODUCK_STANDUP_STRAIGHT=1` + `MICRODUCK_BODY_WIDE=1` | 4096 | 3 000 | 1 h 18 min, warm start from `model_7498.pt` | **stands straight (0.4°) and tracks the body command**: crouch −30 mm → −28.9 mm, pitch ±10° → 9.9 / −8.8°, ±20° → 19.5 / −19.3°, roll ±10° → 9.6 / −9.4°, raise +20 mm → +12.5 mm (teacher v2: −2 mm, 3°). `body_pose_tracking` 3.25 of 4 |
 | 2026-10-11 19:13 → 22:50 | **`velstand` v4** (body-wide) | `Mjlab-VelStand-Rough-Backlash-MicroDuck` + `MICRODUCK_BODY_WIDE=1` | 4096 | 3 000 | 3 h 37 min (GPU shared with the evaluation runs) | warm start from v3 `model_2999.pt`, expert = teacher v3. **Battery: crouch −28.6 mm, tilt ±10 / ±20° tracked, push recovery 94–98 %** (v2: 76–87 %), get-up 98–100 % — see the v4 section |
 | 2026-10-11 22:59 → 00:05 | **`velocity` walk teacher v2** (turn) | `Mjlab-Velocity-Flat-MicroDuck` + `MICRODUCK_TURN=1` | 4096 | 3 000 | 1 h 06 min, warm start from `first-walk/model_10000.pt` | pipeline part 4. Viewer sweep → `model_1750` (drift −0.02). **Battery: turns better (0.6 → 0.65, ±1.0 → 1.09 / −1.07, drift p90 0.08) but walks slower (0.30 → 0.14 m/s, was 0.20); 0.3 rad/s still 0.08** |
-| 2026-10-12 00:14 → 00:31 | **`velstand` v5** (turn + body-wide) | `Mjlab-VelStand-Rough-Backlash-MicroDuck` + `MICRODUCK_TURN=1` + `MICRODUCK_BODY_WIDE=1` | 4096 | **253 of 3 000, stopped** (PC shut down for the night; last checkpoint `model_250.pt`, run `2026-10-12_00-14-51_velstand`) | warm start from v4 `model_2500`, expert = teacher v3, anchor = walk v2 `model_1750` | resumes with `--agent.resume True --agent.load-run 2026-10-12_00-14-51_velstand --agent.load-checkpoint model_250.pt --agent.max-iterations 2750` (plain resume, curricula continue) — [`scripts/pipeline_round3b_resume_v5.sh`](../scripts/pipeline_round3b_resume_v5.sh) |
+| 2026-10-12 00:14 → 00:31, resumed 18:38 → 21:38 | **`velstand` v5** (turn + body-wide) | `Mjlab-VelStand-Rough-Backlash-MicroDuck` + `MICRODUCK_TURN=1` + `MICRODUCK_BODY_WIDE=1` | 4096 | 3 000 (253 before the shutdown, 2 747 after; resumed run `2026-10-12_18-38-05_velstand`) | 17 min + 3 h 00 min | warm start from v4 `model_2500`, expert = teacher v3, anchor = walk v2 `model_1750`. Sweep → `model_2500`. **Battery: turning consistent (0.6 → 0.68, ±1.0 → 1.12 / −0.97, drift p90 0.06) and body commands kept, but speed 0.30 → 0.12 m/s (v4 0.18) and push recovery 87–89 % (v4 94–98 %)** — the slower walk anchor carried over; see the v5 section |
 
 ## `microduck_stand` — iteration 500 check (2026-10-11 00:12)
 
@@ -485,6 +485,40 @@ resume for the remaining 2 750 iterations, then the sweep, push tests and probes
 Next morning, in order: resume v5 → battery on the v5 pick → v4 / v5 / official three-column table →
 first GitHub Release (v4 and v5 ONNX + config + sha256).
 
+## VelStand v5: the turning anchor, measured (2026-10-12 22:00)
+
+Pipeline part 4, step P: v4 `model_2500` warm-started on `Mjlab-VelStand-Rough-Backlash-MicroDuck`
+with `MICRODUCK_TURN=1` + `MICRODUCK_BODY_WIDE=1`, expert teacher v3, **walk anchor = walk teacher
+v2 `model_1750`** (the only change against v4 besides the turn sampling). 3 000 iterations in 3 h 17 min
+across the overnight stop. Viewer sweep over 1500–2999 picked `model_2500` (drift +0.03, 0.6 rad/s →
+0.71). Battery, Flat environment, 256 envs, seed 0:
+
+| | **v4 `2999`** | v5 `2500` | official v7 |
+|---|---|---|---|
+| get-up face-down / face-up / on-side | 100 / 98 / 99 % | 100 / 89 / 95 % | 100 / 93 / 95 % |
+| push 1.0 / 1.2 m/s standing: recovered of fallen | **94 / 98 %** | 88 / 87 % | 92 / 92 % |
+| push 1.0 / 1.2 m/s walking: recovered of fallen | **94 / 97 %** | 87 / 89 % | 94 / 93 % |
+| walk 0.15 / 0.30 / 0.45 m/s | **0.06 / 0.18 / 0.24** | 0.01 / 0.12 / 0.17 | 0.02 / 0.14 / 0.22 |
+| yaw drift p90 at 0.30 / 0.45 | 0.17 / 0.23 | **0.06 / 0.07** | 0.15 / 0.17 |
+| turn +0.3 / +0.6 (per-env p50) / +1.0 / −1.0 rad/s | 0.00 / 0.40 (0.59) / 1.09 / −0.91 | 0.03 / **0.68 (0.69) / 1.12 / −0.97** | 0.00 / 0.05 / 0.39 / −0.34 |
+| crouch −30 mm / raise +20 mm | −28.6 / +8.0 mm | −25.7 / +9.6 mm | −0.6 / +0.3 mm |
+| roll ±10°, pitch ±10°, pitch ±20° | +10.2 / −9.1, +10.2 / −9.6, +20.4 / −19.0 | +9.5 / −8.8, +9.3 / −10.3, +19.5 / −19.3 | ±7.8, +9.9 / −6.2, +16.9 / −15.4 |
+
+Reading: the new anchor did exactly what the walk-teacher measurement predicted. Turning is now
+*consistent* — every duck turns at 0.6 rad/s (per-env median 0.69 against v4's bimodal 0.59 with a
+mean of 0.40), ±1.0 is symmetric, and straight-walk drift is a third of v4's. The price is walking
+speed (0.12 m/s at a 0.30 command, below the official 0.14 and well below v4's 0.18) and, with it,
+push recovery (87–89 %, back below the official 92–94 %) and the face-up get-up (89 %). The 0.3
+rad/s dead zone is unchanged (0.03). Body commands carried over almost intact.
+
+So v5 is a **trade, not an upgrade**: v4 stays the best all-round policy and the one to release;
+v5 shows that the anchor transfers turning and drift faithfully — the walk teacher is where
+turning is decided, and the next walk teacher has to be fast *and* turn. Plan for the speed round
+accordingly: walk teacher v3 = turn patch with a milder in-place bucket (15 % of envs, minimum 0.2
+of the range) plus an additive fine linear-velocity term and more high-speed commands, judged on
+both numbers before any distillation; the 0.3 rad/s dead zone goes to the runtime command remap
+unless that teacher opens it.
+
 ## Official policies measured with the same battery (2026-10-11 21:30)
 
 Downloaded from the Hugging Face repo `pollen-robotics/microduck-policies` (main, 2026-10-11) into
@@ -648,12 +682,11 @@ sweep → push tests and all three probes on the pick. Checkpoints are now chose
 3. ~~VelStand v2 (Flat, 6 000) with the new teacher; posture probe + push tests; compare with v1.~~ Done: stands up straight.
 4. ~~VelStand v3 (Rough-Backlash, 3 000) warm-started from v2; push tests.~~ Done, pick 2500.
 5. ~~Body-pose round (pipeline part 3): teacher v3 + VelStand v4 with crouch / tilt that actually track.~~ Done: v4 crouches 29 mm, tilts ±20°, push recovery 94–98 %.
-6. Turning round (pipeline part 4, queued): walk teacher v2 with the yaw fixes, sweep, VelStand v5 anchored to it.
+6. ~~Turning round (pipeline part 4): walk teacher v2 with the yaw fixes, sweep, VelStand v5 anchored to it.~~ Done: turning consistent, speed and push recovery down — v4 stays the release candidate.
 7. ~~Fixed-seed, batched evaluation battery~~ Done (first version; impact forces and ONNX input still to add) — the regression test for every later round.
 8. ~~The official policies measured with the same battery.~~ Done: walk, walk+get-up and stand-up teachers, all in the README.
 9. GitHub Release per round: ONNX files + config + sha256.
-10. Speed round (walk teacher v3: fine linear-velocity term, more high-speed commands) and the
-    protective-fall rewards (head impact), distilled together into VelStand v6, judged by separate metrics.
+10. Speed round: walk teacher v3 = milder turn bucket + fine linear-velocity term + more high-speed commands, judged on speed *and* turning; then VelStand v6 from v4 with that anchor (+ protective-fall rewards), judged by separate metrics.
 11. Body-pose commands while walking (lift the standing gate).
 12. Fillers for idle GPU time: ablation of the stand-straight fix; episodic tricks (one-leg stand,
     forward roll, bow).
