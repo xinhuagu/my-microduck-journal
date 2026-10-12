@@ -1,10 +1,14 @@
 # my-microduck-journal
 
-**A journal of re-training the Microduck's skills from scratch on a consumer PC** — one RTX
-50-series card under WSL2 on Windows 11 — with my own policies and without the private teacher checkpoints the official recipe depends on.
-Every step, number and dead end is written down, so that anyone with a single consumer GPU can
-reproduce the pipeline. The exact card and the times it gave are in the hardware table below; a
-16 GB card runs the same recipe with half the parallel environments and proportionally more time.
+**A public, verifiable and continuable route to the Microduck's skills.** Every policy here was
+trained from scratch on one consumer PC (an RTX 50-series card under WSL2 on Windows 11), without
+the private teacher checkpoints the official recipe depends on, and is measured with an open
+benchmark against the official policies. The point is not the checkpoints — it is that the whole
+path is open: the teachers, the patches, the exact scripts and checkpoint picks, the evaluation,
+and every number and dead end along the way, so that anyone with a single consumer GPU can
+reproduce it, verify it, or continue training from it. The exact card and the times it gave are in
+the hardware table below; a 16 GB card runs the same recipe with half the parallel environments
+and proportionally more time.
 
 ## Why train your own
 
