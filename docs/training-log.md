@@ -685,7 +685,7 @@ sweep → push tests and all three probes on the pick. Checkpoints are now chose
 6. ~~Turning round (pipeline part 4): walk teacher v2 with the yaw fixes, sweep, VelStand v5 anchored to it.~~ Done: turning consistent, speed and push recovery down — v4 stays the release candidate.
 7. ~~Fixed-seed, batched evaluation battery~~ Done (first version; impact forces and ONNX input still to add) — the regression test for every later round.
 8. ~~The official policies measured with the same battery.~~ Done: walk, walk+get-up and stand-up teachers, all in the README.
-9. GitHub Release per round: ONNX files + config + sha256.
+9. ~~GitHub Release per round: ONNX files + config + sha256.~~ v0.1 published (2026-10-12 22:15): v4, v5 variant, teachers, eval JSONs, SHA256SUMS.
 10. Speed round: walk teacher v3 = milder turn bucket + fine linear-velocity term + more high-speed commands, judged on speed *and* turning; then VelStand v6 from v4 with that anchor (+ protective-fall rewards), judged by separate metrics.
 11. Body-pose commands while walking (lift the standing gate).
 12. Fillers for idle GPU time: ablation of the stand-straight fix; episodic tricks (one-leg stand,
