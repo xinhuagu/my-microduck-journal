@@ -73,6 +73,23 @@ class OnnxPolicy:
         inp = self.sess.get_inputs()[0]
         self.in_name, self.device = inp.name, device
         self.batched = not (isinstance(inp.shape[0], int) and inp.shape[0] == 1)
+        if not self.batched:
+            # Exported files are [1, 61]; rewrite the batch dimension to a symbol so one call serves all envs
+            # (a plain MLP has no batch-dependent reshapes, so this is safe; verified with a 2-row run below).
+            try:
+                import numpy as np, onnx, tempfile
+                m = onnx.load(path)
+                for t in list(m.graph.input) + list(m.graph.output):
+                    t.type.tensor_type.shape.dim[0].dim_param = "N"
+                tmp = tempfile.NamedTemporaryFile(suffix=".onnx", delete=False); onnx.save(m, tmp.name); tmp.close()
+                sess = ort.InferenceSession(tmp.name, providers=["CPUExecutionProvider"])
+                x = np.zeros((2, inp.shape[1]), dtype=np.float32)
+                y2 = sess.run(None, {self.in_name: x})[0]
+                y1 = self.sess.run(None, {self.in_name: x[:1]})[0]
+                if y2.shape[0] == 2 and np.allclose(y1[0], y2[0], atol=1e-5):
+                    self.sess, self.batched = sess, True
+            except Exception as e:  # keep the per-env loop
+                print(f"[battery] dynamic batch not possible ({e.__class__.__name__}); using one call per env")
         print(f"[battery] ONNX policy {path}: input {inp.name} {inp.shape}, batched={self.batched}")
 
     def __call__(self, obs):
@@ -374,50 +391,127 @@ def trial_body(duck: Duck, seconds: float = 5.0):
 
 
 # ----------------------------------------------------------------------------- main
+def run_trials(duck: Duck, only: set[str]) -> dict:
+    out = {}
+    with torch.inference_mode():   # resets write into buffers the policy/env created in inference mode; stay inside it
+        if "getup" in only:
+            out["getup"] = trial_getup(duck)
+        if "push" in only:
+            out["push"] = trial_push(duck)
+        if "tracking" in only:
+            out["tracking"] = trial_tracking(duck)
+        if "body" in only:
+            out["body"] = trial_body(duck)
+    return out
+
+
+def summarize(res: dict) -> dict:
+    """One row of headline numbers per policy (the leaderboard columns)."""
+    s = {}
+    g = res.get("getup")
+    if g:
+        s["getup_recovered"] = sum(r["recovered"] for r in g) / len(g)
+        s["getup_median_s"] = sum(r["median_time_s"] for r in g) / len(g)
+    p = res.get("push")
+    if p:
+        for spd in (1.0, 1.2):
+            rows = [r for r in p if abs(r["push_mps"] - spd) < 1e-6]
+            if rows:
+                s[f"push_recovered_{spd:.1f}"] = sum(r["recovered_of_fallen"] for r in rows) / len(rows)
+    t = res.get("tracking")
+    if t:
+        by = {r["case"]: r for r in t}
+        if "walk 0.30" in by:
+            s["speed_at_0.30"] = by["walk 0.30"]["vx"]; s["drift_p90_at_0.30"] = by["walk 0.30"].get("wz_abs_p90", float("nan"))
+        if "walk 0.45" in by: s["speed_at_0.45"] = by["walk 0.45"]["vx"]
+        if "turn +0.3" in by: s["turn_at_0.3"] = by["turn +0.3"]["wz"]
+        if "turn +0.6" in by: s["turn_at_0.6"] = by["turn +0.6"]["wz"]
+        if "turn +1.0" in by: s["turn_at_1.0"] = by["turn +1.0"]["wz"]
+        if "turn -1.0" in by: s["turn_at_-1.0"] = by["turn -1.0"]["wz"]
+    b = res.get("body")
+    if b:
+        by = {r["case"]: r for r in b}
+        if "crouch -30 mm" in by: s["crouch_mm_for_-30"] = by["crouch -30 mm"]["dz_mm"]
+        if "pitch +10" in by and "pitch -10" in by:
+            s["pitch_deg_for_10"] = (by["pitch +10"]["pitch_deg"] - by["pitch -10"]["pitch_deg"]) / 2
+        if "pitch +20" in by and "pitch -20" in by:
+            s["pitch_deg_for_20"] = (by["pitch +20"]["pitch_deg"] - by["pitch -20"]["pitch_deg"]) / 2
+        if "roll +10" in by and "roll -10" in by:
+            s["roll_deg_for_10"] = (by["roll +10"]["roll_deg"] - by["roll -10"]["roll_deg"]) / 2
+    return s
+
+
+def aggregate(per_seed: list[dict]) -> dict:
+    """mean / std across seeds of every headline number."""
+    keys = sorted({k for r in per_seed for k in r["summary"]})
+    agg = {}
+    for k in keys:
+        v = [r["summary"][k] for r in per_seed if k in r["summary"] and r["summary"][k] == r["summary"][k]]
+        if not v:
+            continue
+        m = sum(v) / len(v)
+        sd = (sum((x - m) ** 2 for x in v) / (len(v) - 1)) ** 0.5 if len(v) > 1 else 0.0
+        agg[k] = {"mean": m, "std": sd, "n": len(v)}
+    return agg
+
+
+def print_tables(res: dict):
+    if "getup" in res:
+        print("\n| spawn | started down | recovered | median s | p90 s | upright at end | end pitch |\n|---|---|---|---|---|---|---|")
+        for r in res["getup"]:
+            print(f"| {r['spawn']} | {fmt_pct(r['started_down'])} | {fmt_pct(r['recovered'])} | {r['median_time_s']:.2f} | {r['p90_time_s']:.2f} | {fmt_pct(r['upright_at_end'])} | {r['end_pitch_deg_median']:.1f}° |")
+    if "push" in res:
+        print("\n| mode | push | fell | recovered of fallen | median recovery s | upright at end |\n|---|---|---|---|---|---|")
+        for r in res["push"]:
+            print(f"| {r['mode']} | {r['push_mps']:.1f} m/s | {fmt_pct(r['fell'])} | {fmt_pct(r['recovered_of_fallen'])} | {r['median_recovery_s']:.2f} | {fmt_pct(r['upright_at_end'])} |")
+    if "tracking" in res:
+        print("\n| case | vx achieved / cmd | wz achieved / cmd | per-env \\|wz\\| p50 / p90 | fell |\n|---|---|---|---|---|")
+        for r in res["tracking"]:
+            print(f"| {r['case']} | {r['vx']:+.2f} / {r['cmd_vx']:+.2f} | {r['wz']:+.2f} / {r['cmd_wz']:+.2f} | {r['wz_abs_p50']:.2f} / {r['wz_abs_p90']:.2f} | {fmt_pct(r['fell'])} |")
+    if "body" in res:
+        print("\n| case | dz mm | roll ° | pitch ° | fell |\n|---|---|---|---|---|")
+        for r in res["body"]:
+            print(f"| {r['case']} | {r['dz_mm']:+.1f} | {r['roll_deg']:+.1f} | {r['pitch_deg']:+.1f} | {fmt_pct(r['fell'])} |")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--task", required=True)
     ap.add_argument("--checkpoint", required=True)
+    ap.add_argument("--name", default=None, help="label for the leaderboard (default: checkpoint file name)")
     ap.add_argument("--num-envs", type=int, default=256)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--seeds", default=None, help="comma list, e.g. 0,1,2 (overrides --seed; reports mean ± std)")
     ap.add_argument("--device", default="cuda:0")
     ap.add_argument("--only", default="getup,push,tracking,body")
     ap.add_argument("--out", default=None)
     a = ap.parse_args()
     t0 = time.time()
-    env, policy = build(a.task, a.checkpoint, a.num_envs, a.seed, a.device)
-    duck = Duck(env, policy, a.seed)
-    print(f"[battery] {a.task} {a.checkpoint} envs={a.num_envs} seed={a.seed} dt={duck.dt:.3f}s  (setup {time.time()-t0:.0f} s)")
-    res = {"task": a.task, "checkpoint": a.checkpoint, "num_envs": a.num_envs, "seed": a.seed}
+    seeds = [int(x) for x in a.seeds.split(",")] if a.seeds else [a.seed]
     only = set(a.only.split(","))
-    with torch.inference_mode():   # resets write into buffers the policy/env created in inference mode; stay inside it
-        if "getup" in only:
-            res["getup"] = trial_getup(duck)
-            print("\n| spawn | started down | recovered | median s | p90 s | upright at end | end pitch |\n|---|---|---|---|---|---|---|")
-            for r in res["getup"]:
-                print(f"| {r['spawn']} | {fmt_pct(r['started_down'])} | {fmt_pct(r['recovered'])} | {r['median_time_s']:.2f} | {r['p90_time_s']:.2f} | {fmt_pct(r['upright_at_end'])} | {r['end_pitch_deg_median']:.1f}° |")
-        if "push" in only:
-            res["push"] = trial_push(duck)
-            print("\n| mode | push | fell | recovered of fallen | median recovery s | upright at end |\n|---|---|---|---|---|---|")
-            for r in res["push"]:
-                print(f"| {r['mode']} | {r['push_mps']:.1f} m/s | {fmt_pct(r['fell'])} | {fmt_pct(r['recovered_of_fallen'])} | {r['median_recovery_s']:.2f} | {fmt_pct(r['upright_at_end'])} |")
-        if "tracking" in only:
-            res["tracking"] = trial_tracking(duck)
-            print("\n| case | vx achieved / cmd | wz achieved / cmd | per-env \\|wz\\| p50 / p90 | fell |\n|---|---|---|---|---|")
-            for r in res["tracking"]:
-                print(f"| {r['case']} | {r['vx']:+.2f} / {r['cmd_vx']:+.2f} | {r['wz']:+.2f} / {r['cmd_wz']:+.2f} | {r['wz_abs_p50']:.2f} / {r['wz_abs_p90']:.2f} | {fmt_pct(r['fell'])} |")
-        if "body" in only:
-            res["body"] = trial_body(duck)
-            print("\n| case | dz mm | roll ° | pitch ° | fell |\n|---|---|---|---|---|")
-            for r in res["body"]:
-                print(f"| {r['case']} | {r['dz_mm']:+.1f} | {r['roll_deg']:+.1f} | {r['pitch_deg']:+.1f} | {fmt_pct(r['fell'])} |")
-    res["seconds"] = time.time() - t0
-    print(f"\n[battery] done in {res['seconds']:.0f} s")
+    name = a.name or os.path.basename(a.checkpoint)
+    per_seed = []
+    for seed in seeds:
+        env, policy = build(a.task, a.checkpoint, a.num_envs, seed, a.device)
+        duck = Duck(env, policy, seed)
+        print(f"\n[battery] {name}  task={a.task}  envs={a.num_envs}  seed={seed}  dt={duck.dt:.3f}s  (setup {time.time()-t0:.0f} s)")
+        res = run_trials(duck, only)
+        env.close()
+        print_tables(res)
+        res["seed"] = seed
+        res["summary"] = summarize(res)
+        per_seed.append(res)
+    out = {"name": name, "task": a.task, "checkpoint": a.checkpoint, "num_envs": a.num_envs, "seeds": seeds,
+           "per_seed": per_seed, "aggregate": aggregate(per_seed), "seconds": time.time() - t0}
+    print(f"\n[battery] headline ({len(seeds)} seed{'s' if len(seeds) > 1 else ''}, mean ± std):")
+    for k, v in out["aggregate"].items():
+        print(f"  {k:<22} {v['mean']:+.3f} ± {v['std']:.3f}")
+    print(f"[battery] done in {out['seconds']:.0f} s")
     if a.out:
+        os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
         with open(a.out, "w") as f:
-            json.dump(res, f, indent=1)
+            json.dump(out, f, indent=1)
         print(f"[battery] wrote {a.out}")
-    env.close()
 
 
 if __name__ == "__main__":

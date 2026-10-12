@@ -11,6 +11,7 @@ export WANDB_MODE=offline MUJOCO_GL=egl PYOPENGL_PLATFORM=egl
 S="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$HOME/microduck_rl" || exit 1
 TASK="${1:?task}"; CKPT="${2:?checkpoint}"; N="${3:-256}"; ONLY="${4:-getup,push,tracking,body}"; OUT="${5:-}"
+SEEDS="${6:-${SEEDS:-0}}"; NAME="${7:-${NAME:-}}"   # 6th arg or env SEEDS="0,1,2"; 7th arg or env NAME = leaderboard label
 # Checkpoint shorthand so run directories are never typed by hand (resumes create a NEW timestamped dir):
 #   latest:<experiment>[:<iteration>]   -> newest run dir under logs/rsl_rl/<experiment>/ (default: its last checkpoint)
 #   e.g. latest:velstand:2500  or  latest:microduck_stand
@@ -25,6 +26,7 @@ EXPERT="${EXPERT:-logs/rsl_rl/microduck_stand/2026-10-11_17-53-45_microduck_stan
 ANCHOR="${ANCHOR:-logs/rsl_rl/velocity/2026-09-07_20-38-41_first-walk/model_10000.pt}"
 mkdir -p scripts_local && cp "$S/eval_battery.py" scripts_local/eval_battery.py
 OUTARG=(); [ -n "$OUT" ] && OUTARG=(--out "$OUT")
+[ -n "$NAME" ] && OUTARG+=(--name "$NAME")
 MICRODUCK_STAND_EXPERT="$EXPERT" MICRODUCK_WALK_ANCHOR="$ANCHOR" \
-uv run python scripts_local/eval_battery.py --task "$TASK" --checkpoint "$CKPT" --num-envs "$N" --only "$ONLY" "${OUTARG[@]}" 2>&1 \
+uv run python scripts_local/eval_battery.py --task "$TASK" --checkpoint "$CKPT" --num-envs "$N" --only "$ONLY" --seeds "$SEEDS" "${OUTARG[@]}" 2>&1 \
   | grep -vE "DeprecationWarning|warnings.warn|UserWarning|tyro/_parsers"
