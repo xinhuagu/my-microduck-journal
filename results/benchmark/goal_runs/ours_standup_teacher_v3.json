@@ -1,0 +1,421 @@
+{
+ "name": "ours_standup_teacher_v3",
+ "task": "Mjlab-StandUp-Flat-MicroDuck",
+ "checkpoint": "exports/standup_v3_2999.onnx",
+ "num_envs": 256,
+ "seeds": [
+  0,
+  1,
+  2
+ ],
+ "per_seed": [
+  {
+   "getup": [
+    {
+     "spawn": "face_down",
+     "n": 256,
+     "started_down": 1.0,
+     "recovered": 1.0,
+     "median_time_s": 0.30000001192092896,
+     "p90_time_s": 0.4000000059604645,
+     "upright_at_end": 1.0,
+     "end_pitch_deg_median": 0.5911600589752197
+    },
+    {
+     "spawn": "face_up",
+     "n": 256,
+     "started_down": 1.0,
+     "recovered": 1.0,
+     "median_time_s": 0.4399999976158142,
+     "p90_time_s": 0.5600000023841858,
+     "upright_at_end": 1.0,
+     "end_pitch_deg_median": 0.5935115218162537
+    },
+    {
+     "spawn": "on_side",
+     "n": 256,
+     "started_down": 1.0,
+     "recovered": 1.0,
+     "median_time_s": 0.5,
+     "p90_time_s": 0.6600000262260437,
+     "upright_at_end": 1.0,
+     "end_pitch_deg_median": 0.595677375793457
+    }
+   ],
+   "body": [
+    {
+     "case": "crouch -30 mm",
+     "cmd_dz_mm": -30.0,
+     "cmd_roll_deg": 0.0,
+     "cmd_pitch_deg": 0.0,
+     "dz_mm": -28.222002029418945,
+     "roll_deg": -0.17940093576908112,
+     "pitch_deg": 0.7197146415710449,
+     "fell": 0.0
+    },
+    {
+     "case": "raise +20 mm",
+     "cmd_dz_mm": 20.0,
+     "cmd_roll_deg": 0.0,
+     "cmd_pitch_deg": 0.0,
+     "dz_mm": 12.369699478149414,
+     "roll_deg": -0.5803847908973694,
+     "pitch_deg": 0.30348798632621765,
+     "fell": 0.0
+    },
+    {
+     "case": "roll +10",
+     "cmd_dz_mm": 0,
+     "cmd_roll_deg": 10.0,
+     "cmd_pitch_deg": 0.0,
+     "dz_mm": 0.2347007393836975,
+     "roll_deg": 9.588809967041016,
+     "pitch_deg": 0.3506990671157837,
+     "fell": 0.0
+    },
+    {
+     "case": "roll -10",
+     "cmd_dz_mm": 0,
+     "cmd_roll_deg": -10.0,
+     "cmd_pitch_deg": 0.0,
+     "dz_mm": 0.5561560392379761,
+     "roll_deg": -9.253936767578125,
+     "pitch_deg": 0.9388501644134521,
+     "fell": 0.0
+    },
+    {
+     "case": "pitch +10",
+     "cmd_dz_mm": 0,
+     "cmd_roll_deg": 0.0,
+     "cmd_pitch_deg": 10.0,
+     "dz_mm": 0.5266293883323669,
+     "roll_deg": 0.15280112624168396,
+     "pitch_deg": 10.038488388061523,
+     "fell": 0.0
+    },
+    {
+     "case": "pitch -10",
+     "cmd_dz_mm": 0,
+     "cmd_roll_deg": 0.0,
+     "cmd_pitch_deg": -10.0,
+     "dz_mm": 0.30059367418289185,
+     "roll_deg": -0.18529784679412842,
+     "pitch_deg": -8.866352081298828,
+     "fell": 0.0
+    },
+    {
+     "case": "pitch +20",
+     "cmd_dz_mm": 0,
+     "cmd_roll_deg": 0.0,
+     "cmd_pitch_deg": 20.0,
+     "dz_mm": 0.43217092752456665,
+     "roll_deg": 0.49628928303718567,
+     "pitch_deg": 19.745519638061523,
+     "fell": 0.0
+    },
+    {
+     "case": "pitch -20",
+     "cmd_dz_mm": 0,
+     "cmd_roll_deg": 0.0,
+     "cmd_pitch_deg": -20.0,
+     "dz_mm": 0.39649754762649536,
+     "roll_deg": -0.17307977378368378,
+     "pitch_deg": -19.391319274902344,
+     "fell": 0.0
+    }
+   ],
+   "seed": 0,
+   "summary": {
+    "getup_recovered": 1.0,
+    "getup_median_s": 0.41333333651224774,
+    "crouch_mm_for_-30": -28.222002029418945,
+    "pitch_deg_for_10": 9.452420234680176,
+    "pitch_deg_for_20": 19.568419456481934,
+    "roll_deg_for_10": 9.42137336730957
+   }
+  },
+  {
+   "getup": [
+    {
+     "spawn": "face_down",
+     "n": 256,
+     "started_down": 1.0,
+     "recovered": 1.0,
+     "median_time_s": 0.30000001192092896,
+     "p90_time_s": 0.5900000333786011,
+     "upright_at_end": 1.0,
+     "end_pitch_deg_median": 0.4954301714897156
+    },
+    {
+     "spawn": "face_up",
+     "n": 256,
+     "started_down": 1.0,
+     "recovered": 1.0,
+     "median_time_s": 0.4399999976158142,
+     "p90_time_s": 0.5400000214576721,
+     "upright_at_end": 1.0,
+     "end_pitch_deg_median": 0.4773097038269043
+    },
+    {
+     "spawn": "on_side",
+     "n": 256,
+     "started_down": 1.0,
+     "recovered": 1.0,
+     "median_time_s": 0.46000000834465027,
+     "p90_time_s": 0.6499999761581421,
+     "upright_at_end": 1.0,
+     "end_pitch_deg_median": 0.5168923735618591
+    }
+   ],
+   "body": [
+    {
+     "case": "crouch -30 mm",
+     "cmd_dz_mm": -30.0,
+     "cmd_roll_deg": 0.0,
+     "cmd_pitch_deg": 0.0,
+     "dz_mm": -28.196678161621094,
+     "roll_deg": -0.16256557404994965,
+     "pitch_deg": 0.6942582726478577,
+     "fell": 0.0
+    },
+    {
+     "case": "raise +20 mm",
+     "cmd_dz_mm": 20.0,
+     "cmd_roll_deg": 0.0,
+     "cmd_pitch_deg": 0.0,
+     "dz_mm": 12.345992088317871,
+     "roll_deg": -0.5977697372436523,
+     "pitch_deg": 0.25876733660697937,
+     "fell": 0.0
+    },
+    {
+     "case": "roll +10",
+     "cmd_dz_mm": 0,
+     "cmd_roll_deg": 10.0,
+     "cmd_pitch_deg": 0.0,
+     "dz_mm": 0.18785148859024048,
+     "roll_deg": 9.54304313659668,
+     "pitch_deg": 0.2068358212709427,
+     "fell": 0.0
+    },
+    {
+     "case": "roll -10",
+     "cmd_dz_mm": 0,
+     "cmd_roll_deg": -10.0,
+     "cmd_pitch_deg": 0.0,
+     "dz_mm": 0.527210533618927,
+     "roll_deg": -9.252214431762695,
+     "pitch_deg": 0.8478518724441528,
+     "fell": 0.0
+    },
+    {
+     "case": "pitch +10",
+     "cmd_dz_mm": 0,
+     "cmd_roll_deg": 0.0,
+     "cmd_pitch_deg": 10.0,
+     "dz_mm": 0.5261600017547607,
+     "roll_deg": 0.1528150588274002,
+     "pitch_deg": 9.982051849365234,
+     "fell": 0.0
+    },
+    {
+     "case": "pitch -10",
+     "cmd_dz_mm": 0,
+     "cmd_roll_deg": 0.0,
+     "cmd_pitch_deg": -10.0,
+     "dz_mm": 0.2550184726715088,
+     "roll_deg": -0.21787728369235992,
+     "pitch_deg": -8.978412628173828,
+     "fell": 0.0
+    },
+    {
+     "case": "pitch +20",
+     "cmd_dz_mm": 0,
+     "cmd_roll_deg": 0.0,
+     "cmd_pitch_deg": 20.0,
+     "dz_mm": 0.4586353898048401,
+     "roll_deg": 0.528317391872406,
+     "pitch_deg": 19.69292640686035,
+     "fell": 0.0
+    },
+    {
+     "case": "pitch -20",
+     "cmd_dz_mm": 0,
+     "cmd_roll_deg": 0.0,
+     "cmd_pitch_deg": -20.0,
+     "dz_mm": 0.3966614603996277,
+     "roll_deg": -0.15065251290798187,
+     "pitch_deg": -19.396556854248047,
+     "fell": 0.0
+    }
+   ],
+   "seed": 1,
+   "summary": {
+    "getup_recovered": 1.0,
+    "getup_median_s": 0.4000000059604645,
+    "crouch_mm_for_-30": -28.196678161621094,
+    "pitch_deg_for_10": 9.480232238769531,
+    "pitch_deg_for_20": 19.5447416305542,
+    "roll_deg_for_10": 9.397628784179688
+   }
+  },
+  {
+   "getup": [
+    {
+     "spawn": "face_down",
+     "n": 256,
+     "started_down": 1.0,
+     "recovered": 1.0,
+     "median_time_s": 0.30000001192092896,
+     "p90_time_s": 0.550000011920929,
+     "upright_at_end": 1.0,
+     "end_pitch_deg_median": 0.5319541096687317
+    },
+    {
+     "spawn": "face_up",
+     "n": 256,
+     "started_down": 1.0,
+     "recovered": 1.0,
+     "median_time_s": 0.4399999976158142,
+     "p90_time_s": 0.5400000214576721,
+     "upright_at_end": 1.0,
+     "end_pitch_deg_median": 0.550409734249115
+    },
+    {
+     "spawn": "on_side",
+     "n": 256,
+     "started_down": 1.0,
+     "recovered": 1.0,
+     "median_time_s": 0.4399999976158142,
+     "p90_time_s": 0.6299999952316284,
+     "upright_at_end": 1.0,
+     "end_pitch_deg_median": 0.5410570502281189
+    }
+   ],
+   "body": [
+    {
+     "case": "crouch -30 mm",
+     "cmd_dz_mm": -30.0,
+     "cmd_roll_deg": 0.0,
+     "cmd_pitch_deg": 0.0,
+     "dz_mm": -28.223440170288086,
+     "roll_deg": -0.14311423897743225,
+     "pitch_deg": 0.6566334366798401,
+     "fell": 0.0
+    },
+    {
+     "case": "raise +20 mm",
+     "cmd_dz_mm": 20.0,
+     "cmd_roll_deg": 0.0,
+     "cmd_pitch_deg": 0.0,
+     "dz_mm": 12.420259475708008,
+     "roll_deg": -0.5698868632316589,
+     "pitch_deg": 0.3006470799446106,
+     "fell": 0.0
+    },
+    {
+     "case": "roll +10",
+     "cmd_dz_mm": 0,
+     "cmd_roll_deg": 10.0,
+     "cmd_pitch_deg": 0.0,
+     "dz_mm": 0.23505836725234985,
+     "roll_deg": 9.593490600585938,
+     "pitch_deg": 0.3103421628475189,
+     "fell": 0.0
+    },
+    {
+     "case": "roll -10",
+     "cmd_dz_mm": 0,
+     "cmd_roll_deg": -10.0,
+     "cmd_pitch_deg": 0.0,
+     "dz_mm": 0.5579665303230286,
+     "roll_deg": -9.234953880310059,
+     "pitch_deg": 0.930846095085144,
+     "fell": 0.0
+    },
+    {
+     "case": "pitch +10",
+     "cmd_dz_mm": 0,
+     "cmd_roll_deg": 0.0,
+     "cmd_pitch_deg": 10.0,
+     "dz_mm": 0.5347654223442078,
+     "roll_deg": 0.17376650869846344,
+     "pitch_deg": 10.012691497802734,
+     "fell": 0.0
+    },
+    {
+     "case": "pitch -10",
+     "cmd_dz_mm": 0,
+     "cmd_roll_deg": 0.0,
+     "cmd_pitch_deg": -10.0,
+     "dz_mm": 0.2953857183456421,
+     "roll_deg": -0.17294855415821075,
+     "pitch_deg": -8.919591903686523,
+     "fell": 0.0
+    },
+    {
+     "case": "pitch +20",
+     "cmd_dz_mm": 0,
+     "cmd_roll_deg": 0.0,
+     "cmd_pitch_deg": 20.0,
+     "dz_mm": 0.4332512617111206,
+     "roll_deg": 0.5612226128578186,
+     "pitch_deg": 19.65736198425293,
+     "fell": 0.0
+    },
+    {
+     "case": "pitch -20",
+     "cmd_dz_mm": 0,
+     "cmd_roll_deg": 0.0,
+     "cmd_pitch_deg": -20.0,
+     "dz_mm": 0.40208548307418823,
+     "roll_deg": -0.12596221268177032,
+     "pitch_deg": -19.45960235595703,
+     "fell": 0.0
+    }
+   ],
+   "seed": 2,
+   "summary": {
+    "getup_recovered": 1.0,
+    "getup_median_s": 0.3933333357175191,
+    "crouch_mm_for_-30": -28.223440170288086,
+    "pitch_deg_for_10": 9.466141700744629,
+    "pitch_deg_for_20": 19.55848217010498,
+    "roll_deg_for_10": 9.414222240447998
+   }
+  }
+ ],
+ "aggregate": {
+  "crouch_mm_for_-30": {
+   "mean": -28.214040120442707,
+   "std": 0.015053081840023772,
+   "n": 3
+  },
+  "getup_median_s": {
+   "mean": 0.40222222606341046,
+   "std": 0.010183501587702502,
+   "n": 3
+  },
+  "getup_recovered": {
+   "mean": 1.0,
+   "std": 0.0,
+   "n": 3
+  },
+  "pitch_deg_for_10": {
+   "mean": 9.466264724731445,
+   "std": 0.013906410178136574,
+   "n": 3
+  },
+  "pitch_deg_for_20": {
+   "mean": 19.55721441904704,
+   "std": 0.011889712138008586,
+   "n": 3
+  },
+  "roll_deg_for_10": {
+   "mean": 9.411074797312418,
+   "std": 0.012181178338804435,
+   "n": 3
+  }
+ },
+ "seconds": 271.29831099510193
+}

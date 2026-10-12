@@ -250,8 +250,44 @@
     "crouch_mm_for_-30": -0.4943832755088806,
     "pitch_deg_for_10": 3.1401758193969727,
     "pitch_deg_for_20": 3.222934901714325,
-    "roll_deg_for_10": 1.5356537103652954
-   }
+    "roll_deg_for_10": 1.5356537103652954,
+    "goal_reached_nopush": 1.0,
+    "goal_median_s_nopush": 9.699999809265137,
+    "goal_stop_drift_m_nopush": 0.00020876526832580566,
+    "goal_reached_push": 0.8828125,
+    "goal_median_s_push": 12.640000343322754,
+    "goal_stop_drift_m_push": 0.0002161860466003418
+   },
+   "goal": [
+    {
+     "with_push": false,
+     "push_mps": 0.0,
+     "n": 256,
+     "reached": 1.0,
+     "median_time_s": 9.699999809265137,
+     "p90_time_s": 12.039999961853027,
+     "final_dist_m_median": 0.08450785279273987,
+     "fell": 0.0,
+     "reached_of_fallen": NaN,
+     "stop_drift_m_median": 0.00020876526832580566,
+     "failed_final_dist_m_median": NaN,
+     "failed_still_down": NaN
+    },
+    {
+     "with_push": true,
+     "push_mps": 1.0,
+     "n": 256,
+     "reached": 0.8828125,
+     "median_time_s": 12.640000343322754,
+     "p90_time_s": 16.06999969482422,
+     "final_dist_m_median": 0.08565521240234375,
+     "fell": 0.984375,
+     "reached_of_fallen": 0.8809524178504944,
+     "stop_drift_m_median": 0.0002161860466003418,
+     "failed_final_dist_m_median": 1.4192168712615967,
+     "failed_still_down": 1.0
+    }
+   ]
   },
   {
    "getup": [
@@ -494,8 +530,44 @@
     "crouch_mm_for_-30": -0.5098879337310791,
     "pitch_deg_for_10": 3.101375102996826,
     "pitch_deg_for_20": 3.2466785311698914,
-    "roll_deg_for_10": 1.5060394406318665
-   }
+    "roll_deg_for_10": 1.5060394406318665,
+    "goal_reached_nopush": 1.0,
+    "goal_median_s_nopush": 9.880000114440918,
+    "goal_stop_drift_m_nopush": 0.0002116858959197998,
+    "goal_reached_push": 0.89453125,
+    "goal_median_s_push": 12.640000343322754,
+    "goal_stop_drift_m_push": 0.00021789222955703735
+   },
+   "goal": [
+    {
+     "with_push": false,
+     "push_mps": 0.0,
+     "n": 256,
+     "reached": 1.0,
+     "median_time_s": 9.880000114440918,
+     "p90_time_s": 12.010000228881836,
+     "final_dist_m_median": 0.08328723907470703,
+     "fell": 0.0,
+     "reached_of_fallen": NaN,
+     "stop_drift_m_median": 0.0002116858959197998,
+     "failed_final_dist_m_median": NaN,
+     "failed_still_down": NaN
+    },
+    {
+     "with_push": true,
+     "push_mps": 1.0,
+     "n": 256,
+     "reached": 0.89453125,
+     "median_time_s": 12.640000343322754,
+     "p90_time_s": 15.095999717712402,
+     "final_dist_m_median": 0.0855189636349678,
+     "fell": 0.9609375,
+     "reached_of_fallen": 0.8902438879013062,
+     "stop_drift_m_median": 0.00021789222955703735,
+     "failed_final_dist_m_median": 1.4199631214141846,
+     "failed_still_down": 1.0
+    }
+   ]
   },
   {
    "getup": [
@@ -738,8 +810,44 @@
     "crouch_mm_for_-30": -0.47315657138824463,
     "pitch_deg_for_10": 3.1410932540893555,
     "pitch_deg_for_20": 3.2397634387016296,
-    "roll_deg_for_10": 1.509374976158142
-   }
+    "roll_deg_for_10": 1.509374976158142,
+    "goal_reached_nopush": 1.0,
+    "goal_median_s_nopush": 9.960000038146973,
+    "goal_stop_drift_m_nopush": 0.00022912770509719849,
+    "goal_reached_push": 0.8828125,
+    "goal_median_s_push": 12.479999542236328,
+    "goal_stop_drift_m_push": 0.00022479891777038574
+   },
+   "goal": [
+    {
+     "with_push": false,
+     "push_mps": 0.0,
+     "n": 256,
+     "reached": 1.0,
+     "median_time_s": 9.960000038146973,
+     "p90_time_s": 12.220000267028809,
+     "final_dist_m_median": 0.08449172228574753,
+     "fell": 0.0,
+     "reached_of_fallen": NaN,
+     "stop_drift_m_median": 0.00022912770509719849,
+     "failed_final_dist_m_median": NaN,
+     "failed_still_down": NaN
+    },
+    {
+     "with_push": true,
+     "push_mps": 1.0,
+     "n": 256,
+     "reached": 0.8828125,
+     "median_time_s": 12.479999542236328,
+     "p90_time_s": 15.84000015258789,
+     "final_dist_m_median": 0.08602576702833176,
+     "fell": 0.97265625,
+     "reached_of_fallen": 0.8795180320739746,
+     "stop_drift_m_median": 0.00022479891777038574,
+     "failed_final_dist_m_median": 1.4721671342849731,
+     "failed_still_down": 1.0
+    }
+   ]
   }
  ],
  "aggregate": {
@@ -761,6 +869,36 @@
   "getup_recovered": {
    "mean": 0.9713541666666666,
    "std": 0.013718299157360338,
+   "n": 3
+  },
+  "goal_median_s_nopush": {
+   "mean": 9.84666665395101,
+   "std": 0.13316669796096173,
+   "n": 3
+  },
+  "goal_median_s_push": {
+   "mean": 12.586666742960611,
+   "std": 0.09237650557780369,
+   "n": 3
+  },
+  "goal_reached_nopush": {
+   "mean": 1.0,
+   "std": 0.0,
+   "n": 3
+  },
+  "goal_reached_push": {
+   "mean": 0.88671875,
+   "std": 0.0067658234670659265,
+   "n": 3
+  },
+  "goal_stop_drift_m_nopush": {
+   "mean": 0.00021652628978093466,
+   "std": 1.101041631208496e-05,
+   "n": 3
+  },
+  "goal_stop_drift_m_push": {
+   "mean": 0.00021962573130925497,
+   "std": 4.56060946493445e-06,
    "n": 3
   },
   "pitch_deg_for_10": {

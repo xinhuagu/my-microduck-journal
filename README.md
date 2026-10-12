@@ -85,12 +85,12 @@ Microduck contract — 256 randomised ducks, three seeds, forced spawns, pushes 
 own and community policies, same numbers, same code path (headline columns; the full table and the
 raw JSON are in the doc and in `results/benchmark/`):
 
-| policy | get-up | push 1.0 / 1.2 m/s recovered | speed at 0.30 | turn 0.6 / 1.0 rad/s | crouch −30 mm | pitch ±10° |
-|---|---|---|---|---|---|---|
-| official `velstand.onnx` (v7) | 96 % | 94 / 93 % | 0.14 m/s | 0.05 / 0.38 | −0.7 mm | 8.0° |
-| **ours v4** (release v0.1) | **99 %** | **95 / 97 %** | **0.18 m/s** | 0.39 / 1.10 | **−28.7 mm** | **10.0°** |
-| ours v5 (turning variant) | 95 % | 89 / 89 % | 0.12 m/s | **0.68 / 1.12** | −25.8 mm | 9.8° |
-| ours v2 | 97 % | 85 / 86 % | 0.18 m/s | 0.38 / 0.92 | −0.5 mm | 3.1° |
+| policy | get-up | push 1.0 / 1.2 m/s recovered | speed at 0.30 | turn 0.6 / 1.0 rad/s | crouch −30 mm | pitch ±10° | 1.5 m goal, pushed |
+|---|---|---|---|---|---|---|---|
+| official `velstand.onnx` (v7) | 96 % | 94 / 93 % | 0.14 m/s | 0.05 / 0.38 | −0.7 mm | 8.0° | 94 % |
+| **ours v4** (release v0.1) | **99 %** | **95 / 97 %** | **0.18 m/s** | 0.39 / 1.10 | **−28.7 mm** | **10.0°** | **96 %** |
+| ours v5 (turning variant) | 95 % | 89 / 89 % | 0.12 m/s | **0.68 / 1.12** | −25.8 mm | 9.8° | 90 % |
+| ours v2 | 97 % | 85 / 86 % | 0.18 m/s | 0.38 / 0.92 | −0.5 mm | 3.1° | 89 % |
 
 ```bash
 bash scripts/eval_battery.sh Mjlab-VelStand-Flat-MicroDuck my_policy.onnx 256 getup,push,tracking,body out.json 0,1,2 my_policy

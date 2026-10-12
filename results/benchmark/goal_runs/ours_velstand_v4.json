@@ -1,0 +1,169 @@
+{
+ "name": "ours_velstand_v4",
+ "task": "Mjlab-VelStand-Flat-MicroDuck",
+ "checkpoint": "exports/velstand_v4_2999.onnx",
+ "num_envs": 256,
+ "seeds": [
+  0,
+  1,
+  2
+ ],
+ "per_seed": [
+  {
+   "goal": [
+    {
+     "with_push": false,
+     "push_mps": 0.0,
+     "n": 256,
+     "reached": 1.0,
+     "median_time_s": 9.779999732971191,
+     "p90_time_s": 11.960000038146973,
+     "final_dist_m_median": 0.08185311406850815,
+     "fell": 0.0,
+     "reached_of_fallen": NaN,
+     "stop_drift_m_median": 0.00021070241928100586,
+     "failed_final_dist_m_median": NaN,
+     "failed_still_down": NaN
+    },
+    {
+     "with_push": true,
+     "push_mps": 1.0,
+     "n": 256,
+     "reached": 0.9609375,
+     "median_time_s": 12.65999984741211,
+     "p90_time_s": 15.569999694824219,
+     "final_dist_m_median": 0.0819554403424263,
+     "fell": 0.91015625,
+     "reached_of_fallen": 0.9570815563201904,
+     "stop_drift_m_median": 0.0002177506685256958,
+     "failed_final_dist_m_median": 1.3365018367767334,
+     "failed_still_down": 1.0
+    }
+   ],
+   "seed": 0,
+   "summary": {
+    "goal_reached_nopush": 1.0,
+    "goal_median_s_nopush": 9.779999732971191,
+    "goal_stop_drift_m_nopush": 0.00021070241928100586,
+    "goal_reached_push": 0.9609375,
+    "goal_median_s_push": 12.65999984741211,
+    "goal_stop_drift_m_push": 0.0002177506685256958
+   }
+  },
+  {
+   "goal": [
+    {
+     "with_push": false,
+     "push_mps": 0.0,
+     "n": 256,
+     "reached": 1.0,
+     "median_time_s": 9.720000267028809,
+     "p90_time_s": 11.789999961853027,
+     "final_dist_m_median": 0.08110574632883072,
+     "fell": 0.0,
+     "reached_of_fallen": NaN,
+     "stop_drift_m_median": 0.00020193308591842651,
+     "failed_final_dist_m_median": NaN,
+     "failed_still_down": NaN
+    },
+    {
+     "with_push": true,
+     "push_mps": 1.0,
+     "n": 256,
+     "reached": 0.96875,
+     "median_time_s": 12.539999961853027,
+     "p90_time_s": 15.165999412536621,
+     "final_dist_m_median": 0.08181960880756378,
+     "fell": 0.94921875,
+     "reached_of_fallen": 0.9670781493186951,
+     "stop_drift_m_median": 0.00020591169595718384,
+     "failed_final_dist_m_median": 1.3193098306655884,
+     "failed_still_down": 1.0
+    }
+   ],
+   "seed": 1,
+   "summary": {
+    "goal_reached_nopush": 1.0,
+    "goal_median_s_nopush": 9.720000267028809,
+    "goal_stop_drift_m_nopush": 0.00020193308591842651,
+    "goal_reached_push": 0.96875,
+    "goal_median_s_push": 12.539999961853027,
+    "goal_stop_drift_m_push": 0.00020591169595718384
+   }
+  },
+  {
+   "goal": [
+    {
+     "with_push": false,
+     "push_mps": 0.0,
+     "n": 256,
+     "reached": 1.0,
+     "median_time_s": 9.9399995803833,
+     "p90_time_s": 12.010000228881836,
+     "final_dist_m_median": 0.0808204784989357,
+     "fell": 0.0,
+     "reached_of_fallen": NaN,
+     "stop_drift_m_median": 0.00022598356008529663,
+     "failed_final_dist_m_median": NaN,
+     "failed_still_down": NaN
+    },
+    {
+     "with_push": true,
+     "push_mps": 1.0,
+     "n": 256,
+     "reached": 0.953125,
+     "median_time_s": 12.680000305175781,
+     "p90_time_s": 15.6899995803833,
+     "final_dist_m_median": 0.0808490440249443,
+     "fell": 0.9375,
+     "reached_of_fallen": 0.9500000476837158,
+     "stop_drift_m_median": 0.00022949278354644775,
+     "failed_final_dist_m_median": 1.2857409715652466,
+     "failed_still_down": 1.0
+    }
+   ],
+   "seed": 2,
+   "summary": {
+    "goal_reached_nopush": 1.0,
+    "goal_median_s_nopush": 9.9399995803833,
+    "goal_stop_drift_m_nopush": 0.00022598356008529663,
+    "goal_reached_push": 0.953125,
+    "goal_median_s_push": 12.680000305175781,
+    "goal_stop_drift_m_push": 0.00022949278354644775
+   }
+  }
+ ],
+ "aggregate": {
+  "goal_median_s_nopush": {
+   "mean": 9.8133331934611,
+   "std": 0.11372450993645233,
+   "n": 3
+  },
+  "goal_median_s_push": {
+   "mean": 12.626666704813639,
+   "std": 0.07571887366594734,
+   "n": 3
+  },
+  "goal_reached_nopush": {
+   "mean": 1.0,
+   "std": 0.0,
+   "n": 3
+  },
+  "goal_reached_push": {
+   "mean": 0.9609375,
+   "std": 0.0078125,
+   "n": 3
+  },
+  "goal_stop_drift_m_nopush": {
+   "mean": 0.00021287302176157633,
+   "std": 1.217127615574126e-05,
+   "n": 3
+  },
+  "goal_stop_drift_m_push": {
+   "mean": 0.00021771838267644247,
+   "std": 1.1790576947511122e-05,
+   "n": 3
+  }
+ },
+ "seconds": 346.67962074279785
+}
