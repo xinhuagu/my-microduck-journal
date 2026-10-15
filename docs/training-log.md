@@ -21,6 +21,7 @@ iterations (24 env-steps each). Checkpoints every 250 iterations.
 | 2026-10-11 19:13 → 22:50 | **`velstand` v4** (body-wide) | `Mjlab-VelStand-Rough-Backlash-MicroDuck` + `MICRODUCK_BODY_WIDE=1` | 4096 | 3 000 | 3 h 37 min (GPU shared with the evaluation runs) | warm start from v3 `model_2999.pt`, expert = teacher v3. **Battery: crouch −28.6 mm, tilt ±10 / ±20° tracked, push recovery 94–98 %** (v2: 76–87 %), get-up 98–100 % — see the v4 section |
 | 2026-10-11 22:59 → 00:05 | **`velocity` walk teacher v2** (turn) | `Mjlab-Velocity-Flat-MicroDuck` + `MICRODUCK_TURN=1` | 4096 | 3 000 | 1 h 06 min, warm start from `first-walk/model_10000.pt` | pipeline part 4. Viewer sweep → `model_1750` (drift −0.02). **Battery: turns better (0.6 → 0.65, ±1.0 → 1.09 / −1.07, drift p90 0.08) but walks slower (0.30 → 0.14 m/s, was 0.20); 0.3 rad/s still 0.08** |
 | 2026-10-12 00:14 → 00:31, resumed 18:38 → 21:38 | **`velstand` v5** (turn + body-wide) | `Mjlab-VelStand-Rough-Backlash-MicroDuck` + `MICRODUCK_TURN=1` + `MICRODUCK_BODY_WIDE=1` | 4096 | 3 000 (253 before the shutdown, 2 747 after; resumed run `2026-10-12_18-38-05_velstand`) | 17 min + 3 h 00 min | warm start from v4 `model_2500`, expert = teacher v3, anchor = walk v2 `model_1750`. Sweep → `model_2500`. **Battery: turning consistent (0.6 → 0.68, ±1.0 → 1.12 / −0.97, drift p90 0.06) and body commands kept, but speed 0.30 → 0.12 m/s (v4 0.18) and push recovery 87–89 % (v4 94–98 %)** — the slower walk anchor carried over; see the v5 section |
+| 2026-10-15 21:40 → 21:48 | **`microduck_roulade`** (forward roll) | `Mjlab-Roulade-Flat-MicroDuck` | 4096 | **301 of 10 000, stopped** (PC shut down; checkpoint `model_250.pt`, run `2026-10-15_21-40-11_microduck_roulade`) | 1.6 s/iteration → ≈ 4.5 h for the full budget | standalone episodic trick, no teacher, from scratch. At 257: `roulade_progress` 0.93 and rising, landing rewards ≈ 0 (the second half comes from the reverse-curriculum spawns later). Resume: [`scripts/train_roulade_resume.sh`](../scripts/train_roulade_resume.sh) |
 
 ## `microduck_stand` — iteration 500 check (2026-10-11 00:12)
 
@@ -716,5 +717,5 @@ sweep → push tests and all three probes on the pick. Checkpoints are now chose
 9. ~~GitHub Release per round: ONNX files + config + sha256.~~ v0.1 published (2026-10-12 22:15): v4, v5 variant, teachers, eval JSONs, SHA256SUMS.
 10. Speed round: walk teacher v3 = milder turn bucket + fine linear-velocity term + more high-speed commands, judged on speed *and* turning; then VelStand v6 from v4 with that anchor (+ protective-fall rewards), judged by separate metrics.
 11. Body-pose commands while walking (lift the standing gate).
-12. Fillers for idle GPU time: ablation of the stand-straight fix; episodic tricks (one-leg stand,
-    forward roll, bow).
+12. Fillers for idle GPU time: ablation of the stand-straight fix; episodic tricks — forward roll
+    started 2026-10-15 (paused at iteration 301), one-leg stand, bow.
