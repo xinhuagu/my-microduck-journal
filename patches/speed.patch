@@ -1,0 +1,44 @@
+--- a/src/mjlab_microduck/tasks/mdp.py
++++ b/src/mjlab_microduck/tasks/mdp.py
+@@ -7775,3 +7775,17 @@
+         pose_score = torch.exp(-pose_err_sq / (pose_std * pose_std))
+     return height_score * upright_score * pose_score
+ 
++
++# ─── my-microduck-journal (MICRODUCK_SPEED): forward-speed fine tracking ────────────────────────────
++def track_lin_vel_x_fine(
++    env: ManagerBasedRlEnv,
++    std: float,
++    command_name: str,
++    asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
++) -> torch.Tensor:
++    """Forward-speed-only Gaussian, exp(-(vx_cmd - vx)^2 / std^2), ADDED next to the stock
++    track_linear_velocity (std 0.32 m/s, which barely prices a 0.1 m/s shortfall). Same additive pattern as
++    track_yaw_rate_fine: the stock term keeps its far-error gradient, this one prices small errors."""
++    asset: Entity = env.scene[asset_cfg.name]
++    cmd = env.command_manager.get_command(command_name)
++    return torch.exp(-torch.square(cmd[:, 0] - asset.data.root_link_lin_vel_b[:, 0]) / std**2)
+--- a/src/mjlab_microduck/tasks/microduck_velocity_env_cfg.py
++++ b/src/mjlab_microduck/tasks/microduck_velocity_env_cfg.py
+@@ -669,6 +669,21 @@
+         )
+         print("[velocity] MICRODUCK_TURN: turn-in-place 25 % of envs from 10 % of the range, + track_yaw_fine (std 0.35, w 2.0)")
+ 
++    # Local tweak (my-microduck-journal): MICRODUCK_SPEED=1 — walking speed is under-tracked on every walk policy
++    # (0.30 m/s -> 0.14-0.20); the stock linear term (std 0.32) barely prices the shortfall. Add a forward-only fine
++    # term next to it, sample a bit more of the fast end, and (with MICRODUCK_TURN) use a milder in-place bucket.
++    if os.environ.get("MICRODUCK_SPEED"):
++        cfg.commands["twist"].ranges.lin_vel_x = (-0.4, 0.5)
++        cfg.rewards["track_lin_vel_x_fine"] = RewardTermCfg(
++            func=microduck_mdp.track_lin_vel_x_fine,
++            weight=2.0,
++            params={"std": 0.10, "command_name": cfg.rewards["track_linear_velocity"].params["command_name"]},
++        )
++        if os.environ.get("MICRODUCK_TURN"):
++            cfg.commands["twist"].rel_turn_in_place_envs = 0.15
++            cfg.commands["twist"].turn_in_place_min_frac = 0.2
++        print("[velocity] MICRODUCK_SPEED: + track_lin_vel_x_fine (std 0.10, w 2.0), lin_vel_x (-0.4, 0.5)"
++              + (", turn bucket 15 % from 20 %" if os.environ.get("MICRODUCK_TURN") else ""))
+ 
+     # Head pose command (4D deltas from HOME, in joint order:
+     #   neck_pitch, head_pitch, head_yaw, head_roll). Tracked as a primary
