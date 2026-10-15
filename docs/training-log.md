@@ -22,7 +22,7 @@ iterations (24 env-steps each). Checkpoints every 250 iterations.
 | 2026-10-11 22:59 → 00:05 | **`velocity` walk teacher v2** (turn) | `Mjlab-Velocity-Flat-MicroDuck` + `MICRODUCK_TURN=1` | 4096 | 3 000 | 1 h 06 min, warm start from `first-walk/model_10000.pt` | pipeline part 4. Viewer sweep → `model_1750` (drift −0.02). **Battery: turns better (0.6 → 0.65, ±1.0 → 1.09 / −1.07, drift p90 0.08) but walks slower (0.30 → 0.14 m/s, was 0.20); 0.3 rad/s still 0.08** |
 | 2026-10-12 00:14 → 00:31, resumed 18:38 → 21:38 | **`velstand` v5** (turn + body-wide) | `Mjlab-VelStand-Rough-Backlash-MicroDuck` + `MICRODUCK_TURN=1` + `MICRODUCK_BODY_WIDE=1` | 4096 | 3 000 (253 before the shutdown, 2 747 after; resumed run `2026-10-12_18-38-05_velstand`) | 17 min + 3 h 00 min | warm start from v4 `model_2500`, expert = teacher v3, anchor = walk v2 `model_1750`. Sweep → `model_2500`. **Battery: turning consistent (0.6 → 0.68, ±1.0 → 1.12 / −0.97, drift p90 0.06) and body commands kept, but speed 0.30 → 0.12 m/s (v4 0.18) and push recovery 87–89 % (v4 94–98 %)** — the slower walk anchor carried over; see the v5 section |
 | 2026-10-15 21:40 → 21:58 | **`microduck_roulade`** (forward roll) | `Mjlab-Roulade-Flat-MicroDuck` | 4096 | **367 of 10 000, stopped on purpose** (checkpoint `model_250.pt`; the official policy set already ships a `roulade.onnx`, so the GPU budget goes back to the gaps — speed, protective fall, slow turning) | 1.6 s/iteration → ≈ 4.5 h for the full budget | standalone episodic trick, no teacher, from scratch. At 257: `roulade_progress` 0.93 and rising, landing rewards ≈ 0 (the second half comes from the reverse-curriculum spawns later). Resume: [`scripts/train_roulade_resume.sh`](../scripts/train_roulade_resume.sh) |
-| 2026-10-15 22:09 → 23:22 | **`velocity` walk teacher v3** (turn + speed) | `Mjlab-Velocity-Flat-MicroDuck` + `MICRODUCK_TURN=1` + `MICRODUCK_SPEED=1` | 4096 | **2 842 of 3 000, stopped for the night** (checkpoints up to `model_2750`, run `2026-10-15_22-09-39_velocity`; the battery gate and the distillation continue with [`scripts/pipeline_round4b_resume_gate.sh`](../scripts/pipeline_round4b_resume_gate.sh)) | warm start from `first-walk/model_10000.pt`; GPU power limit 450 W from here on | pipeline 5 ([`scripts/pipeline_round4_speed.sh`](../scripts/pipeline_round4_speed.sh)): additive forward-speed fine term (std 0.10, w 2.0, [`patches/speed.patch`](../patches/speed.patch)), lin_vel_x (−0.4, 0.5), milder turn bucket (15 % from 20 %). The teacher is gated on the battery before any distillation (speed@0.30 ≥ 0.20 and turn@0.6 ≥ 0.50); if it passes, VelStand v6 from v4 with it as the anchor, then a 3-seed battery |
+| 2026-10-15 22:09 → 23:22 | **`velocity` walk teacher v3** (turn + speed) | `Mjlab-Velocity-Flat-MicroDuck` + `MICRODUCK_TURN=1` + `MICRODUCK_SPEED=1` | 4096 | 2 842 of 3 000 (stopped for the night; checkpoints to `model_2750`, run `2026-10-15_22-09-39_velocity`) | 1 h 13 min at 450 W | **passes the gate: battery pick `model_2000` tracks 0.15 / 0.30 / 0.45 m/s as 0.16 / 0.31 / 0.44 m/s** (was 0.10 / 0.20 / 0.27) and turns 0.6 → 0.63, ±1.0 → 1.08 / −1.02, drift p90 0.07; 0.3 rad/s still 0.12. VelStand v6 with it as the anchor is next ([`scripts/pipeline_round4b_resume_gate.sh`](../scripts/pipeline_round4b_resume_gate.sh)) |
 
 ## `microduck_stand` — iteration 500 check (2026-10-11 00:12)
 
@@ -520,6 +520,35 @@ accordingly: walk teacher v3 = turn patch with a milder in-place bucket (15 % of
 of the range) plus an additive fine linear-velocity term and more high-speed commands, judged on
 both numbers before any distillation; the 0.3 rad/s dead zone goes to the runtime command remap
 unless that teacher opens it.
+
+## Walk teacher v3: the speed patch closes the speed gap (2026-10-15 23:35)
+
+Same diagnosis as the turning dead zone, applied to forward speed: the stock linear-velocity term
+(std 0.32 m/s) prices a 0.1 m/s shortfall at about 10 %, while longer steps cost smoothness, foot and
+effort penalties, so every walk policy settled at roughly 60 % of the command — the official one
+included. [`patches/speed.patch`](../patches/speed.patch) (`MICRODUCK_SPEED=1`) adds a forward-only
+fine term (`track_lin_vel_x_fine`, std 0.10, weight 2.0) **next to** the stock term, widens the forward
+command range to (−0.4, 0.5), and — together with `MICRODUCK_TURN=1` — makes the in-place turn bucket
+milder (15 % of envs from 20 % of the range, instead of 25 % from 10 %, which had cost speed in walk
+teacher v2). Warm start from `first_walk_10000`, 2 842 iterations (stopped for the night; the gate
+only needs the checkpoints up to 2 750), GPU capped at 450 W.
+
+The teacher was judged **before** any distillation this time (the v5 lesson): battery tracking trial,
+256 envs, on every checkpoint from 1 500 to 2 750, pick by score, gate = 0.30 m/s command ≥ 0.20 m/s
+achieved and 0.6 rad/s ≥ 0.50. All six checkpoints pass (0.29–0.31 m/s, 0.61–0.63 rad/s); pick
+`model_2000`:
+
+| command | official `alpha_walking` | walk v1 `first_walk_10000` | walk v2 (turn) `1750` | **walk v3 (turn + speed) `2000`** |
+|---|---|---|---|---|
+| walk 0.15 / 0.30 / 0.45 m/s | 0.00 / 0.15 / 0.21 | 0.10 / 0.20 / 0.27 | 0.02 / 0.14 / 0.20 | **0.16 / 0.31 / 0.44** |
+| yaw drift p90 at 0.30 | 0.10 | 0.15 | 0.08 | **0.07** |
+| turn 0.3 / 0.6 rad/s | 0.00 / 0.02 | 0.05 / 0.57 | 0.08 / 0.65 | 0.12 / **0.63** |
+| turn +1.0 / −1.0 rad/s | 0.35 / −0.17 | 1.00 / −1.00 | 1.09 / −1.07 | 1.08 / −1.02 |
+
+The walking speed now matches the command at every tested speed — from about 60 % to 100 % — without
+giving up the turning of v2, and with the lowest drift of all four. The 0.3 rad/s in-place turn is
+still the one open cell (0.12, and per-env median 0.01: a minority of ducks turn). Next: VelStand v6 =
+v4 + this teacher as the walk anchor, then the 3-seed battery against v4 and the official policy.
 
 ## The navigation layer: fall, get up, walk to a goal, stop (2026-10-13 00:20)
 

@@ -66,6 +66,7 @@ while the same GPU keeps training. Each duck starts an episode on the ground and
 | Benchmark (256 envs × 3 seeds, any ONNX) | ✅ published | 10 policies — official, own, community — through one exam; v4 level or ahead of the official v7 on every column — see [docs/benchmark.md](docs/benchmark.md) |
 | Release | ✅ v0.1 | `velstand_v4.onnx` + v5 variant + teachers + evaluation JSONs + checksums — [releases/tag/v0.1](https://github.com/xinhuagu/my-microduck-journal/releases/tag/v0.1) |
 | Turning (`patches/turn.patch`) | 🔄 partial | A walk teacher trained with slow in-place turns and a yaw-only fine term turns 0.6 rad/s → 0.65 and ±1.0 symmetrically with a third of the yaw drift, and VelStand v5 anchored to it inherits that — at the cost of walking speed (0.30 → 0.12 m/s). The 0.3 rad/s dead zone is unchanged. Next walk teacher has to be fast and turn — see [docs/training-log.md](docs/training-log.md#velstand-v5-the-turning-anchor-measured-2026-10-12-2200) |
+| Walking speed (`patches/speed.patch`) | 🔄 teacher done | Every walk policy, official included, walked at ~60 % of the command. A fine forward-speed term added next to the stock one gives a walk teacher that tracks 0.15 / 0.30 / 0.45 m/s as 0.16 / 0.31 / 0.44 and still turns (0.6 → 0.63 rad/s, ±1.0 symmetric). VelStand v6 with it as the anchor is next — see [docs/training-log.md](docs/training-log.md#walk-teacher-v3-the-speed-patch-closes-the-speed-gap-2026-10-15-2335) |
 
 ## Fall, get up, walk to the goal, stop
 
