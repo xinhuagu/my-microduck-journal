@@ -20,6 +20,9 @@ for f in glob.glob(os.path.join(d, "*.json")):
     g = lambda k: a.get(k, {}).get("mean", 0.0)
     if kind == "walk":
         sc = 3 * g("speed_at_0.30") + g("turn_at_0.3") + 0.5 * g("turn_at_0.6") - 0.5 * g("drift_p90_at_0.30")
+    elif kind == "release":   # v0.2 candidates: recovery first, speed and turning capped at the bar
+        sc = 2 * (g("push_recovered_1.0") + g("push_recovered_1.2")) + 2 * min(g("speed_at_0.30"), 0.30) \
+             + 0.5 * min(g("turn_at_0.6"), 0.60) - 0.5 * g("drift_p90_at_0.30")
     else:
         sc = g("push_recovered_1.0") + g("push_recovered_1.2") + 4 * g("speed_at_0.30") + 0.5 * g("turn_at_0.6") - 0.5 * g("drift_p90_at_0.30")
     rows.append((int(m.group(1)), sc, g("speed_at_0.30"), g("turn_at_0.3"), g("turn_at_0.6"), g("drift_p90_at_0.30"),
@@ -34,6 +37,9 @@ it, sc, sp, t3, t6, dr, p1, p2 = best
 if kind == "walk":
     ok = sp >= 0.20 and t6 >= 0.50
     gate = f"speed@0.30 {sp:.2f} >= 0.20 and turn@0.6 {t6:.2f} >= 0.50"
+elif kind == "release":
+    ok = sp >= 0.28 and p1 >= 0.95 and p2 >= 0.95
+    gate = f"single-seed preview: speed@0.30 {sp:.2f} >= 0.28, push rec 1.0/1.2 {p1:.2f}/{p2:.2f} >= 0.95 (the 3-seed release gate decides)"
 else:
     ok = sp >= 0.17 and p2 >= 0.90
     gate = f"speed@0.30 {sp:.2f} >= 0.17 and push rec@1.2 {p2:.2f} >= 0.90"
