@@ -24,7 +24,7 @@ iterations (24 env-steps each). Checkpoints every 250 iterations.
 | 2026-10-15 21:40 → 21:58 | **`microduck_roulade`** (forward roll) | `Mjlab-Roulade-Flat-MicroDuck` | 4096 | **367 of 10 000, stopped on purpose** (checkpoint `model_250.pt`; the official policy set already ships a `roulade.onnx`, so the GPU budget goes back to the gaps — speed, protective fall, slow turning) | 1.6 s/iteration → ≈ 4.5 h for the full budget | standalone episodic trick, no teacher, from scratch. At 257: `roulade_progress` 0.93 and rising, landing rewards ≈ 0 (the second half comes from the reverse-curriculum spawns later). Resume: [`scripts/train_roulade_resume.sh`](../scripts/train_roulade_resume.sh) |
 | 2026-10-15 22:09 → 23:22 | **`velocity` walk teacher v3** (turn + speed) | `Mjlab-Velocity-Flat-MicroDuck` + `MICRODUCK_TURN=1` + `MICRODUCK_SPEED=1` | 4096 | 2 842 of 3 000 (stopped for the night; checkpoints to `model_2750`, run `2026-10-15_22-09-39_velocity`) | 1 h 13 min at 450 W | **passes the gate: battery pick `model_2000` tracks 0.15 / 0.30 / 0.45 m/s as 0.16 / 0.31 / 0.44 m/s** (was 0.10 / 0.20 / 0.27) and turns 0.6 → 0.63, ±1.0 → 1.08 / −1.02, drift p90 0.07; 0.3 rad/s still 0.12. VelStand v6 with it as the anchor is next ([`scripts/pipeline_round4b_resume_gate.sh`](../scripts/pipeline_round4b_resume_gate.sh)) |
 | 2026-10-17 09:56 → 13:05 | **`velstand` v6** (speed anchor) | `Mjlab-VelStand-Rough-Backlash-MicroDuck` + `MICRODUCK_TURN=1` + `MICRODUCK_SPEED=1` + `MICRODUCK_BODY_WIDE=1` | 4096 | 3 000 | 3 h 09 min (4.2 s/iteration at 575 W) | warm start from v4 `model_2999`, expert = teacher v3, anchor = walk v3 `model_2000`. Battery sweep → `model_2250`. **Speed solved (0.30 → 0.30 m/s, 0.45 → 0.41), turning 0.6 → 0.60, goal reached 36 % faster — but push recovery 88–89 % (v4 95–97 %)**: a trade, v4 stays the release |
-| 2026-10-17 15:30 → | **v0.2 candidates A and B** | `Mjlab-VelStand-Rough-Backlash-MicroDuck` + TURN + SPEED + BODY_WIDE | 4096 | A 3 000, B 2 000, **running** | pipeline 6 ([`scripts/pipeline_round5_release_candidates.sh`](../scripts/pipeline_round5_release_candidates.sh)) | **A**: v4 + walk teacher v3 anchor, *no* in-network speed term (`MICRODUCK_SPEED_FINE_W=0`) — is the in-network speed term what costs push recovery? **B**: resume v6 with the speed term at half weight and the stand expert's imitation doubled on fallen frames (`MICRODUCK_EXPERT_BC_COEF=2.0`). Both go through a battery sweep, a 3-seed battery and the v0.2 release gate ([`scripts/release_gate.py`](../scripts/release_gate.py): push recovery ≥ 95 % in each cell, get-up ≥ 98 %, speed@0.30 ≥ 0.28, turn@0.6 ≥ 0.55, crouch ≤ −27 mm, pushed goal ≥ 96 %) |
+| 2026-10-17 15:30 → 21:50 | **v0.2 candidates A and B** | `Mjlab-VelStand-Rough-Backlash-MicroDuck` + TURN + SPEED + BODY_WIDE | 4096 | A 3 000 (3 h 15), B 2 000 (2 h 09) | pipeline 6 ([`scripts/pipeline_round5_release_candidates.sh`](../scripts/pipeline_round5_release_candidates.sh)) | **A** (v4 + walk teacher v3 anchor, no in-network speed term) pick `model_2000`; **B** (resume v6, speed term ×½, fallen-frame imitation ×2) pick `model_4249`. **Both fail the release gate** on push recovery (A 83–89 %, B 87–93 %, bar 95 %) and get-up (97 %, bar 98 %); both keep the speed (0.28 / 0.29 m/s) and the crouch (−28 mm). No v0.2 — see the section below |
 
 ## `microduck_stand` — iteration 500 check (2026-10-11 00:12)
 
@@ -522,6 +522,51 @@ accordingly: walk teacher v3 = turn patch with a milder in-place bucket (15 % of
 of the range) plus an additive fine linear-velocity term and more high-speed commands, judged on
 both numbers before any distillation; the 0.3 rad/s dead zone goes to the runtime command remap
 unless that teacher opens it.
+
+## v0.2 candidates: the fast anchor is what costs push recovery (2026-10-17 22:00)
+
+v6 was fast but recovered fewer push falls (84–92 % against v4's 95–97 %). Two candidates, each one
+change, judged by a release gate agreed beforehand ([`scripts/release_gate.py`](../scripts/release_gate.py):
+push recovery ≥ 95 % in each of standing / walking × 1.0 / 1.2 m/s, get-up ≥ 98 %, speed at 0.30 ≥ 0.28,
+turn at 0.6 ≥ 0.55, crouch ≤ −27 mm, pushed goal ≥ 96 %). New env knobs, defaults unchanged:
+`MICRODUCK_SPEED_FINE_W` (weight of the in-network fine speed term; 0 leaves it out) and
+`MICRODUCK_EXPERT_BC_COEF` (fallen-frame imitation of the stand expert).
+
+- **A** — v4 warm-started with the speed-tracking walk teacher v3 as the anchor and **no** fine speed
+  term inside VelStand (`MICRODUCK_SPEED_FINE_W=0`): is the in-network speed term the culprit?
+- **B** — v6 `model_2250` resumed with the speed term at half weight and the stand expert's imitation
+  doubled on fallen frames (`MICRODUCK_EXPERT_BC_COEF=2.0`): can stronger imitation repair the recovery?
+
+Battery, 3 seeds, 256 envs (raw JSON in `results/benchmark/v02_candidates/`):
+
+| | v4 (release) | v6 | **A `2000`** | **B `4249`** |
+|---|---|---|---|---|
+| push recovered, standing 1.0 / 1.2 m/s | 95.3 / 96.7 % | 89.2 / 83.6 % | 89.2 / 82.9 % | 89.3 / 86.8 % |
+| push recovered, walking 1.0 / 1.2 m/s | 94.9 / 96.6 % | 89.4 / 91.6 % | 87.2 / 88.1 % | 92.7 / 92.2 % |
+| get-up (three spawns) | 98.7 % | 97.2 % | 96.8 % | 97.4 % |
+| speed at 0.30 / 0.45 m/s | 0.18 / 0.24 | 0.30 / 0.41 | 0.28 / 0.39 | 0.29 / 0.41 |
+| turn at 0.6 / ±1.0 rad/s | 0.39 / 1.10, −0.91 | 0.60 / 1.08, −1.01 | 0.55 / 1.00, −0.98 | 0.56 / 1.02, −0.98 |
+| crouch for −30 mm | −28.7 | −24.2 | −27.8 | −27.6 |
+| 1.5 m goal: reached / after a push; median time | 100 / 96 %; 9.7 s | 100 / 92 %; 6.2 s | 100 / 93 %; 6.6 s | 100 / 92 %; 6.4 s |
+
+Reading:
+
+1. **A answers the question cleanly.** Without any speed term inside VelStand the policy is still fast
+   (0.28 m/s) — the speed comes from the walk anchor — and it recovers exactly as poorly as v6 (83–89 %).
+   So the recovery loss is not the in-network reward; it comes with the fast walk teacher as the anchor.
+   v4, anchored to the slower original teacher, recovers 95–97 %.
+2. **B helps a little, not enough.** Doubling the imitation of the stand expert on fallen frames lifts
+   walking-push recovery to 92–93 % and the crouch back to −27.6 mm, but standing pushes stay at 87–89 %.
+   Imitating the expert harder once fallen does not fix what happens *before* the fall is recognised.
+3. Nothing passes the gate, so there is no v0.2; v4 stays the release, v6 / A / B are the fast variants.
+
+Hypothesis for the next round: the walk anchor teaches every frame with tilt < 25°, and the first
+frames after a push — the duck tipping but not yet "fallen" by the 35° expert gate — fall inside that
+range, where a fast-gait teacher keeps stepping instead of bracing. Test: the same as A, but the anchor
+only on frames with tilt < 10° (`anchor_tilt_deg`), leaving 10–35° to PPO and the recovery rewards.
+If recovery returns to ≥ 95 % with the speed kept, that is v0.2; if speed drops with it, speed and
+push stability compete for the same frames and the anchor needs a different split (e.g. by command or
+by a push detector) rather than by tilt.
 
 ## VelStand v6: the speed anchor, measured (2026-10-17 13:40)
 
