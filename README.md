@@ -53,7 +53,7 @@ What is different from the official setup:
 iteration-500 checkpoint in mjlab's native viewer (`uv run play ... --num-envs 64 --viewer native`)
 while the same GPU keeps training. Each duck starts an episode on the ground and has to get up.*
 
-## Status (2026-10-15)
+## Status (2026-10-17)
 
 ✅ = verified in simulation here · 🔄 = training / being tested.
 
