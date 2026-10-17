@@ -339,12 +339,23 @@ def trial_push(duck: Duck, speeds=(1.0, 1.2), modes=("standing", "walking"), sec
             fell = (tr["z"] < DOWN_Z).any(0)
             t_up = recovery_stats(tr, duck.dt)     # time from the push until up for 1 s
             rec = (~torch.isnan(t_up)) & fell
+            # where do the non-recovered fallen ducks end up? (last 1 s): lying (z < 70 mm), low (70-100 mm), up but tilted
+            fail = fell & ~rec
+            last = slice(-int(round(1.0 / duck.dt)), None)
+            z_end = tr["z"][last].mean(0); tilt_end = tr["tilt"][last].mean(0)
+            nf = max(int(fail.sum()), 1)
             rows.append({
                 "mode": mode, "push_mps": speed, "n": duck.n,
                 "fell": float(fell.float().mean()),
                 "recovered_of_fallen": float(rec.float().sum() / max(int(fell.sum()), 1)),
                 "median_recovery_s": nanmedian(t_up[fell]) if fell.any() else float("nan"),
                 "upright_at_end": float(up_mask(tr)[-1].float().mean()),
+                "failed_n": int(fail.sum()),
+                "failed_lying": float((fail & (z_end < 0.070)).float().sum() / nf),
+                "failed_low": float((fail & (z_end >= 0.070) & (z_end < UP_Z)).float().sum() / nf),
+                "failed_up_but_tilted": float((fail & (z_end >= UP_Z)).float().sum() / nf),
+                "failed_z_mm_median": float(z_end[fail].median() * 1000) if fail.any() else float("nan"),
+                "failed_tilt_deg_median": float(tilt_end[fail].median()) if fail.any() else float("nan"),
             })
     return rows
 
@@ -564,6 +575,9 @@ def print_tables(res: dict):
         print("\n| mode | push | fell | recovered of fallen | median recovery s | upright at end |\n|---|---|---|---|---|---|")
         for r in res["push"]:
             print(f"| {r['mode']} | {r['push_mps']:.1f} m/s | {fmt_pct(r['fell'])} | {fmt_pct(r['recovered_of_fallen'])} | {r['median_recovery_s']:.2f} | {fmt_pct(r['upright_at_end'])} |")
+            if r.get("failed_n"):
+                print(f"    not recovered: {r['failed_n']} ducks — lying {fmt_pct(r['failed_lying'])}, low 70-100 mm {fmt_pct(r['failed_low'])}, "
+                      f"up but tilted >15° {fmt_pct(r['failed_up_but_tilted'])}; median end z {r['failed_z_mm_median']:.0f} mm, tilt {r['failed_tilt_deg_median']:.0f}°")
     if "tracking" in res:
         print("\n| case | vx achieved / cmd | wz achieved / cmd | per-env \\|wz\\| p50 / p90 | fell |\n|---|---|---|---|---|")
         for r in res["tracking"]:

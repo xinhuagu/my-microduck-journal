@@ -1,0 +1,99 @@
+{
+ "name": "diag_walk_v3",
+ "task": "Mjlab-Velocity-Flat-MicroDuck",
+ "checkpoint": "logs/rsl_rl/velocity/2026-10-15_22-09-39_velocity/model_2000.pt",
+ "num_envs": 256,
+ "seeds": [
+  0
+ ],
+ "per_seed": [
+  {
+   "push": [
+    {
+     "mode": "standing",
+     "push_mps": 0.4,
+     "n": 256,
+     "fell": 0.0,
+     "recovered_of_fallen": 0.0,
+     "median_recovery_s": NaN,
+     "upright_at_end": 1.0
+    },
+    {
+     "mode": "standing",
+     "push_mps": 0.6,
+     "n": 256,
+     "fell": 0.13671875,
+     "recovered_of_fallen": 0.2571428716182709,
+     "median_recovery_s": 0.8199999928474426,
+     "upright_at_end": 0.8984375
+    },
+    {
+     "mode": "standing",
+     "push_mps": 0.8,
+     "n": 256,
+     "fell": 0.6328125,
+     "recovered_of_fallen": 0.2839506268501282,
+     "median_recovery_s": 0.6000000238418579,
+     "upright_at_end": 0.546875
+    },
+    {
+     "mode": "standing",
+     "push_mps": 1.0,
+     "n": 256,
+     "fell": 0.95703125,
+     "recovered_of_fallen": 0.06122448667883873,
+     "median_recovery_s": 0.6000000238418579,
+     "upright_at_end": 0.1015625
+    },
+    {
+     "mode": "walking",
+     "push_mps": 0.4,
+     "n": 256,
+     "fell": 0.1171875,
+     "recovered_of_fallen": 0.7000000476837158,
+     "median_recovery_s": 0.5400000214576721,
+     "upright_at_end": 0.96484375
+    },
+    {
+     "mode": "walking",
+     "push_mps": 0.6,
+     "n": 256,
+     "fell": 0.4296875,
+     "recovered_of_fallen": 0.41818180680274963,
+     "median_recovery_s": 0.5199999809265137,
+     "upright_at_end": 0.75
+    },
+    {
+     "mode": "walking",
+     "push_mps": 0.8,
+     "n": 256,
+     "fell": 0.69921875,
+     "recovered_of_fallen": 0.13966479897499084,
+     "median_recovery_s": 0.6600000262260437,
+     "upright_at_end": 0.3984375
+    },
+    {
+     "mode": "walking",
+     "push_mps": 1.0,
+     "n": 256,
+     "fell": 0.890625,
+     "recovered_of_fallen": 0.061403509229421616,
+     "median_recovery_s": 0.5400000214576721,
+     "upright_at_end": 0.1640625
+    }
+   ],
+   "seed": 0,
+   "summary": {
+    "push_recovered_1.0": 0.06131399795413017
+   }
+  }
+ ],
+ "aggregate": {
+  "push_recovered_1.0": {
+   "mean": 0.06131399795413017,
+   "std": 0.0,
+   "n": 1
+  }
+ },
+ "seconds": 81.70714521408081
+}

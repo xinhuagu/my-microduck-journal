@@ -523,6 +523,38 @@ of the range) plus an additive fine linear-velocity term and more high-speed com
 both numbers before any distillation; the 0.3 rad/s dead zone goes to the runtime command remap
 unless that teacher opens it.
 
+## Diagnosis: what the fast anchor actually breaks (2026-10-17 22:30)
+
+Two cheap battery runs before choosing the next 4-hour experiment (raw JSON in
+`results/benchmark/diag_push/`; push trial now also reports where the non-recovered ducks end up).
+
+**1. Balance is not the problem.** Push trial on the two walk teachers (they cannot get up, so only the
+fall rate matters), standing: old teacher falls 0 / 10 / 67 / 100 % at 0.4 / 0.6 / 0.8 / 1.0 m/s, the
+fast teacher 0 / 14 / 63 / 96 %. Walking, the fast teacher falls a little more at small pushes (12 vs 2 %
+at 0.4 m/s) and less at 1.0. A and v4 fall about equally often. So a "fragile fast stance" does not
+explain the gap.
+
+**2. Recovery after the fall is.** A fails to get up even after mild falls (0.6 m/s standing: 97 %,
+walking 0.4 m/s: 96 %) where v4 gets up every time, and the failures are all the same kind:
+
+| push → not recovered | v4: lying / low / up-but-tilted | A: lying / low / up-but-tilted |
+|---|---|---|
+| standing 1.0 m/s | 18 ducks: 83 / 17 / 0 % | 31 ducks: 94 / 6 / 0 % |
+| standing 1.2 m/s | 10 ducks: 90 / 10 / 0 % | 31 ducks: 100 / 0 / 0 % |
+| walking 1.0 m/s | 12 ducks: 83 / 17 / 0 % | 26 ducks: 96 / 0 / 4 % |
+| median end state of the failures | z 65 mm, tilt 95° | z 64 mm, tilt 97° |
+
+They end **lying on the side / back** (trunk at 64 mm, tilted ~97°) and stay there for the 6 s window —
+not half-up, not in a lean. The get-up battery from ground spawns shows the same skill eroding:
+face-up 97.5 → 93.9 %, on-side 98.7 → 96.9 % from v4 to A (B: 95.3 / 96.9 %).
+
+So the earlier hypothesis (the anchor teaching the 10–35° just-pushed frames) is unlikely: those frames
+pass in a fraction of a second and are not where the ducks get stuck. What erodes during training with
+the fast anchor is the get-up from side / back — frames the anchor never teaches (tilt > 35° is the stand
+expert's) but that compete for the same network and learning signal. Next candidate, aimed at exactly
+that: A's configuration with the stand expert's imitation on fallen frames raised (×3) and the share of
+episodes that start lying on the side / back increased, so the get-up keeps getting signal.
+
 ## v0.2 candidates: the fast anchor is what costs push recovery (2026-10-17 22:00)
 
 v6 was fast but recovered fewer push falls (84–92 % against v4's 95–97 %). Two candidates, each one

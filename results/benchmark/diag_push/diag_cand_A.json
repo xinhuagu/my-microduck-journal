@@ -1,0 +1,99 @@
+{
+ "name": "diag_cand_A",
+ "task": "Mjlab-VelStand-Flat-MicroDuck",
+ "checkpoint": "logs/rsl_rl/velstand/2026-10-17_15-30-09_velstand/model_2000.pt",
+ "num_envs": 256,
+ "seeds": [
+  0
+ ],
+ "per_seed": [
+  {
+   "push": [
+    {
+     "mode": "standing",
+     "push_mps": 0.4,
+     "n": 256,
+     "fell": 0.00390625,
+     "recovered_of_fallen": 1.0,
+     "median_recovery_s": 0.7400000095367432,
+     "upright_at_end": 1.0
+    },
+    {
+     "mode": "standing",
+     "push_mps": 0.6,
+     "n": 256,
+     "fell": 0.12109375,
+     "recovered_of_fallen": 0.9677419066429138,
+     "median_recovery_s": 1.2000000476837158,
+     "upright_at_end": 0.99609375
+    },
+    {
+     "mode": "standing",
+     "push_mps": 0.8,
+     "n": 256,
+     "fell": 0.6484375,
+     "recovered_of_fallen": 0.9156626462936401,
+     "median_recovery_s": 0.9399999976158142,
+     "upright_at_end": 0.9453125
+    },
+    {
+     "mode": "standing",
+     "push_mps": 1.0,
+     "n": 256,
+     "fell": 0.8828125,
+     "recovered_of_fallen": 0.8584070801734924,
+     "median_recovery_s": 1.0800000429153442,
+     "upright_at_end": 0.875
+    },
+    {
+     "mode": "walking",
+     "push_mps": 0.4,
+     "n": 256,
+     "fell": 0.09375,
+     "recovered_of_fallen": 0.9583333730697632,
+     "median_recovery_s": 0.9599999785423279,
+     "upright_at_end": 0.99609375
+    },
+    {
+     "mode": "walking",
+     "push_mps": 0.6,
+     "n": 256,
+     "fell": 0.33984375,
+     "recovered_of_fallen": 0.9195402264595032,
+     "median_recovery_s": 0.9399999976158142,
+     "upright_at_end": 0.9765625
+    },
+    {
+     "mode": "walking",
+     "push_mps": 0.8,
+     "n": 256,
+     "fell": 0.6328125,
+     "recovered_of_fallen": 0.8827160596847534,
+     "median_recovery_s": 0.9399999976158142,
+     "upright_at_end": 0.9296875
+    },
+    {
+     "mode": "walking",
+     "push_mps": 1.0,
+     "n": 256,
+     "fell": 0.859375,
+     "recovered_of_fallen": 0.8545454144477844,
+     "median_recovery_s": 0.9800000190734863,
+     "upright_at_end": 0.875
+    }
+   ],
+   "seed": 0,
+   "summary": {
+    "push_recovered_1.0": 0.8564762473106384
+   }
+  }
+ ],
+ "aggregate": {
+  "push_recovered_1.0": {
+   "mean": 0.8564762473106384,
+   "std": 0.0,
+   "n": 1
+  }
+ },
+ "seconds": 109.40711760520935
+}
