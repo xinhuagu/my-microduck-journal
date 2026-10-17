@@ -23,6 +23,7 @@ iterations (24 env-steps each). Checkpoints every 250 iterations.
 | 2026-10-12 00:14 → 00:31, resumed 18:38 → 21:38 | **`velstand` v5** (turn + body-wide) | `Mjlab-VelStand-Rough-Backlash-MicroDuck` + `MICRODUCK_TURN=1` + `MICRODUCK_BODY_WIDE=1` | 4096 | 3 000 (253 before the shutdown, 2 747 after; resumed run `2026-10-12_18-38-05_velstand`) | 17 min + 3 h 00 min | warm start from v4 `model_2500`, expert = teacher v3, anchor = walk v2 `model_1750`. Sweep → `model_2500`. **Battery: turning consistent (0.6 → 0.68, ±1.0 → 1.12 / −0.97, drift p90 0.06) and body commands kept, but speed 0.30 → 0.12 m/s (v4 0.18) and push recovery 87–89 % (v4 94–98 %)** — the slower walk anchor carried over; see the v5 section |
 | 2026-10-15 21:40 → 21:58 | **`microduck_roulade`** (forward roll) | `Mjlab-Roulade-Flat-MicroDuck` | 4096 | **367 of 10 000, stopped on purpose** (checkpoint `model_250.pt`; the official policy set already ships a `roulade.onnx`, so the GPU budget goes back to the gaps — speed, protective fall, slow turning) | 1.6 s/iteration → ≈ 4.5 h for the full budget | standalone episodic trick, no teacher, from scratch. At 257: `roulade_progress` 0.93 and rising, landing rewards ≈ 0 (the second half comes from the reverse-curriculum spawns later). Resume: [`scripts/train_roulade_resume.sh`](../scripts/train_roulade_resume.sh) |
 | 2026-10-15 22:09 → 23:22 | **`velocity` walk teacher v3** (turn + speed) | `Mjlab-Velocity-Flat-MicroDuck` + `MICRODUCK_TURN=1` + `MICRODUCK_SPEED=1` | 4096 | 2 842 of 3 000 (stopped for the night; checkpoints to `model_2750`, run `2026-10-15_22-09-39_velocity`) | 1 h 13 min at 450 W | **passes the gate: battery pick `model_2000` tracks 0.15 / 0.30 / 0.45 m/s as 0.16 / 0.31 / 0.44 m/s** (was 0.10 / 0.20 / 0.27) and turns 0.6 → 0.63, ±1.0 → 1.08 / −1.02, drift p90 0.07; 0.3 rad/s still 0.12. VelStand v6 with it as the anchor is next ([`scripts/pipeline_round4b_resume_gate.sh`](../scripts/pipeline_round4b_resume_gate.sh)) |
+| 2026-10-17 09:56 → 13:05 | **`velstand` v6** (speed anchor) | `Mjlab-VelStand-Rough-Backlash-MicroDuck` + `MICRODUCK_TURN=1` + `MICRODUCK_SPEED=1` + `MICRODUCK_BODY_WIDE=1` | 4096 | 3 000 | 3 h 09 min (4.2 s/iteration at 575 W) | warm start from v4 `model_2999`, expert = teacher v3, anchor = walk v3 `model_2000`. Battery sweep → `model_2250`. **Speed solved (0.30 → 0.30 m/s, 0.45 → 0.41), turning 0.6 → 0.60, goal reached 36 % faster — but push recovery 88–89 % (v4 95–97 %)**: a trade, v4 stays the release |
 
 ## `microduck_stand` — iteration 500 check (2026-10-11 00:12)
 
@@ -520,6 +521,47 @@ accordingly: walk teacher v3 = turn patch with a milder in-place bucket (15 % of
 of the range) plus an additive fine linear-velocity term and more high-speed commands, judged on
 both numbers before any distillation; the 0.3 rad/s dead zone goes to the runtime command remap
 unless that teacher opens it.
+
+## VelStand v6: the speed anchor, measured (2026-10-17 13:40)
+
+v4 `model_2999` warm-started on `Mjlab-VelStand-Rough-Backlash-MicroDuck` with
+`MICRODUCK_TURN=1` + `MICRODUCK_SPEED=1` + `MICRODUCK_BODY_WIDE=1`, expert teacher v3, **walk anchor =
+walk teacher v3 `model_2000`** (the teacher that tracks speed). 3 000 iterations in 3 h 09 min.
+Pipeline: battery sweep (tracking + push, 256 envs) over 2000–2999 → `model_2250` (best score; its
+1.2 m/s push recovery, 0.86, misses the 0.90 bar the pipeline checks) → full battery, 3 seeds.
+
+| | official v7 | **v4** (release) | **v6 `2250`** |
+|---|---|---|---|
+| get-up face-down / face-up / on-side | 100 / 91 / 94 % | 100 / 98 / 99 % | 99 / 95 / 99 % |
+| push 1.0 m/s, standing: fell / recovered | 97 % / 93 % | 95 % / 95 % | 88 % / **89 %** |
+| push 1.2 m/s, standing: fell / recovered | 99 % / 92 % | 98 % / 97 % | 92 % / **84 %** |
+| push 1.0 / 1.2 m/s, walking: recovered | 96 / 94 % | 95 / 97 % | 89 / 92 % |
+| walk 0.30 / 0.45 m/s → achieved | 0.14 / 0.22 | 0.18 / 0.24 | **0.30 / 0.41** |
+| yaw drift p90 at 0.30 | 0.16 | 0.18 | **0.10** |
+| turn 0.3 / 0.6 / +1.0 / −1.0 rad/s | 0.00 / 0.05 / 0.38 / −0.34 | 0.00 / 0.39 / 1.10 / −0.91 | 0.00 / **0.60 / 1.08 / −1.01** |
+| crouch −30 mm / pitch ±10° / ±20° / roll ±10° | −0.7 / 8.0 / 16.1 / 7.8 | −28.7 / 10.0 / 19.7 / 9.6 | −24.2 / 9.7 / 19.6 / 9.8 |
+| 1.5 m goal: reached, median time | 97 %, 13.8 s | 100 %, 9.7 s | 100 %, **6.2 s** |
+| 1.5 m goal, pushed on the way: reached, median | 94 %, 16.8 s | 96 %, 12.4 s | 92 %, **9.1 s** |
+
+Reading:
+
+- **The speed gap is closed in the full policy**: 0.30 m/s is walked at 0.30, 0.45 at 0.41 (v4: 0.18 /
+  0.24, official 0.14 / 0.22), in-place turning is now consistent and symmetric (0.60 at 0.6, ±1.0),
+  drift is the lowest of the three. On the task it shows directly: the 1.5 m goal takes 6.2 s instead
+  of 9.7 (v4) and 13.8 (official). The anchor carried the teacher's speed over faithfully — the third
+  time the "change the teacher, the anchor transfers it" pattern holds.
+- **Push recovery is the price**: 84–92 % of push falls recovered against 95–97 % for v4 and 92–96 %
+  for the official policy. v6 *falls* less often (88–92 % against 95–98 %) but recovers less when it
+  does, mostly while standing. Get-ups from ground spawns are unchanged (95–99 %), so the stand-up
+  skill itself is intact; what suffers is the transition from a push into it. The sweep shows recovery
+  peaking at 2250 and dropping again at 2750–2999 (0.80 at 1.2 m/s) while speed stays at 0.30 — the
+  speed and recovery objectives pull against each other in this network.
+- Crouch is 4 mm shallower (−24 vs −29 mm); tilt is unchanged.
+
+So v6 is a trade like v5, but a much better one: v4 stays the release; v6 is the fast variant and the
+better choice for navigation. Next for the gap: keep v6's anchor and recover the recovery — e.g. a
+resume of v6 with the fine speed term at half weight inside VelStand (the anchor already carries
+speed) and the recovery bonus stage extended, judged on push recovery ≥ 95 % with speed ≥ 0.28.
 
 ## Walk teacher v3: the speed patch closes the speed gap (2026-10-15 23:35)
 

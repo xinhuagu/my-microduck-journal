@@ -67,7 +67,7 @@ while the same GPU keeps training. Each duck starts an episode on the ground and
 | Release | ✅ v0.1 | `velstand_v4.onnx` + v5 variant + teachers + evaluation JSONs + checksums — [releases/tag/v0.1](https://github.com/xinhuagu/my-microduck-journal/releases/tag/v0.1) |
 | Navigation layer (walk to a goal) | ✅ measured | 20 lines on top of the policy turn a goal into velocity commands; v4 reaches a goal 1.5 m away 100 % of the time, 96 % after being pushed over on the way (official v7: 97 / 94 %) — see the GIF below and the benchmark's goal columns |
 | Turning (`patches/turn.patch`) | 🔄 partial | A walk teacher trained with slow in-place turns and a yaw-only fine term turns 0.6 rad/s → 0.65 and ±1.0 symmetrically with a third of the yaw drift, and VelStand v5 anchored to it inherits that — at the cost of walking speed (0.30 → 0.12 m/s). The 0.3 rad/s dead zone is unchanged. Next walk teacher has to be fast and turn — see [docs/training-log.md](docs/training-log.md#velstand-v5-the-turning-anchor-measured-2026-10-12-2200) |
-| Walking speed (`patches/speed.patch`) | 🔄 teacher done | Every walk policy, official included, walked at ~60 % of the command. A fine forward-speed term added next to the stock one gives a walk teacher that tracks 0.15 / 0.30 / 0.45 m/s as 0.16 / 0.31 / 0.44 and still turns (0.6 → 0.63 rad/s, ±1.0 symmetric). VelStand v6 with it as the anchor is next — see [docs/training-log.md](docs/training-log.md#walk-teacher-v3-the-speed-patch-closes-the-speed-gap-2026-10-15-2335) |
+| Walking speed (`patches/speed.patch`) | ✅ in a variant | Every walk policy, official included, walked at ~60 % of the command. A fine forward-speed term in the walk teacher, carried into VelStand by the anchor, gives **v6: 0.30 m/s for 0.30, 0.41 for 0.45**, consistent turning, and a 1.5 m goal in 6.2 s (v4 9.7 s, official 13.8 s) — but 88–89 % push recovery against v4's 95–97 %, so v4 stays the release. See [docs/training-log.md](docs/training-log.md#velstand-v6-the-speed-anchor-measured-2026-10-17-1340) |
 
 ## Fall, get up, walk to the goal, stop
 
@@ -91,6 +91,7 @@ raw JSON are in the doc and in `results/benchmark/`):
 |---|---|---|---|---|---|---|---|
 | official `velstand.onnx` (v7) | 96 % | 94 / 93 % | 0.14 m/s | 0.05 / 0.38 | −0.7 mm | 8.0° | 94 % |
 | **ours v4** (release v0.1) | **99 %** | **95 / 97 %** | **0.18 m/s** | 0.39 / 1.10 | **−28.7 mm** | **10.0°** | **96 %** |
+| ours v6 (speed variant) | 97 % | 89 / 88 % | **0.30 m/s** | **0.60 / 1.08** | −24.2 mm | 9.7° | 92 % |
 | ours v5 (turning variant) | 95 % | 89 / 89 % | 0.12 m/s | **0.68 / 1.12** | −25.8 mm | 9.8° | 90 % |
 | ours v2 | 97 % | 85 / 86 % | 0.18 m/s | 0.38 / 0.92 | −0.5 mm | 3.1° | 89 % |
 
