@@ -198,17 +198,19 @@ class Lab:
         self.save()
 
     def gate(self):
+        bars = self.s["gate"].get("bars")
+        check = (lambda p: check_bars(p, bars)) if bars else release_gate.check
         if self.dry:
-            print("  $ release_gate.py exam.json", *self.s["gate"]["compare"])
+            print("  $ gate", "bars " + json.dumps(bars) if bars else "release_gate.py", "exam.json", *self.s["gate"]["compare"])
             return
         out = os.path.join(self.dir, "exam.json")
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
-            verdict = release_gate.check(out)
+            verdict = check(out)
             for other in self.s["gate"]["compare"]:
                 p = os.path.join(RL, other)
                 if os.path.exists(p):
-                    release_gate.check(p)
+                    check(p)
         print(buf.getvalue(), end="")
         with open(os.path.join(self.dir, "lab.log"), "a") as f:
             f.write(buf.getvalue())
@@ -247,6 +249,27 @@ class Lab:
         self.gate()
         self.ledger()
         self.log(f"PIPELINE DONE (lab {self.name})")
+
+
+def check_bars(path, bars):
+    """A gate given in the spec: {metric: "<= -14" | ">= 0.8"}. Metrics are the exam's aggregate means, plus
+    push_worst (the worst of the four push-recovery cells). Prints one ok / MISS line per bar."""
+    d = json.load(open(path))
+    vals = {k: v["mean"] for k, v in d["aggregate"].items() if isinstance(v, dict) and "mean" in v}
+    cells = release_gate.push_cells(d)
+    if cells:
+        vals["push_worst"] = min(cells.values())
+    ok_all = True
+    lines = []
+    for metric, rule in bars.items():
+        op, bar = rule.split()
+        v = vals.get(metric, float("nan"))
+        ok = (v <= float(bar)) if op == "<=" else (v >= float(bar))
+        ok_all &= ok
+        lines.append(f"  {'ok  ' if ok else 'MISS'} {metric:<26} {v:>9.3f}   (bar {op} {bar})")
+    print(f"\n{d['name']}  ({path})  -> {'PASS' if ok_all else 'FAIL'}")
+    print("\n".join(lines))
+    return ok_all
 
 
 def board():

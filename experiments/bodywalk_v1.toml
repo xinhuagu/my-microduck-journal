@@ -1,0 +1,40 @@
+# Second skill through the loop: crouch / tilt while walking.
+# Measured first (2026-10-19, trial "bodywalk", walking at 0.20 m/s): every existing policy - v4, C, S3 -
+# STOPS walking when given a body command (speed 0.12-0.22 -> 0.00-0.03 m/s), then poses well (crouch
+# -17 to -19 mm for -20, tilt ~+-10 deg). Upstream zeroes body commands while walking, so no policy has
+# seen one. Here: MICRODUCK_BODY_WALK = share of envs that keep a half-range body command while walking.
+include = ["_velstand_default_base.toml"]
+name = "bodywalk_v1"
+iterations = 1500
+
+[start]
+mode = "resume"     # from the default policy; curricula continue
+from = "logs/rsl_rl/velstand/2026-10-11_19-13-04_velstand/model_2999.pt"   # v4 = velstand_default.onnx
+
+[env]
+MICRODUCK_BODY_WALK = "0.3"
+
+[sweep]
+from = 3500
+trials = "tracking,push,bodywalk"
+seeds = "0"
+pick = "bodywalk"
+
+[exam]
+trials = "getup,push,tracking,body,bodywalk,goal"
+
+# Fixed before the run. New skill: keep walking while posing, and pose. No regression against v4.
+[gate.bars]
+walk_speed_ratio_body = ">= 0.8"      # speed with a body command / speed without (baseline: 0.00-0.25)
+"walk_crouch_mm_for_-20" = "<= -14"  # trunk height change for a -20 mm command while walking
+walk_pitch_deg_for_10 = ">= 7"
+walk_roll_deg_for_10 = ">= 7"
+walk_body_fell = "<= 0.02"
+push_worst = ">= 0.94"                # v4: 94.9 % in its worst cell
+getup_recovered = ">= 0.98"
+"crouch_mm_for_-30" = "<= -27"       # standing crouch stays
+"speed_at_0.30" = ">= 0.17"           # v4: 0.18
+goal_reached_push = ">= 0.95"         # v4: 96 %
+
+[gate]
+compare = ["logs/eval/ours_velstand_v4.json"]

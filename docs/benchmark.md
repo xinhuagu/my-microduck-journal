@@ -28,6 +28,7 @@ About 15 minutes per seed on an RTX 5090 shared with nothing else. The script al
 | push | standing, or walking at 0.30 m/s for 3 s; then the trunk's horizontal velocity is set to 1.0 or 1.2 m/s in a random direction; 6 s | fell = trunk below 90 mm; recovered of fallen (timed from the push), upright at the end |
 | tracking | 8 s per command: walk 0.15 / 0.30 / 0.45 m/s, turn in place ±0.3 / 0.6 / 1.0 rad/s | mean over the last 5 s of body-frame forward speed and yaw rate; per-env \|yaw\| median / p90 as drift |
 | body | standing; crouch −30 mm, raise +20 mm, roll ±10°, pitch ±10° and ±20°; 5 s each | achieved after 3 s (last 2 s), falls judged by tilt |
+| bodywalk (added 2026-10-19, not in the table below) | walking at 0.20 m/s, then crouch −20 mm, roll ±10°, pitch ±10°; 6 s each; the command's walking gate is bypassed for the trial so any policy can be measured | change against the same walk with a zero body command (per duck, last 3 s), speed while posing, falls by tilt |
 | goal | a goal 1.5 m away in a random direction, 30 s, with and without a 1.0 m/s push after 2 s; the controller in `goal_controller` (heading error → turn, distance → speed, inside 10 cm → stop) sits on top of the policy | reached = inside 10 cm for one continuous second; rate, median time, stop drift |
 
 The table shows the headline numbers: get-up rate (mean of the three spawns) and median time, push

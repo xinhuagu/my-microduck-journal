@@ -1,0 +1,123 @@
+{
+ "name": "C",
+ "task": "Mjlab-VelStand-Flat-MicroDuck",
+ "checkpoint": "exports/cand_C_v02_2250.onnx",
+ "num_envs": 256,
+ "seeds": [
+  0
+ ],
+ "per_seed": [
+  {
+   "bodywalk": [
+    {
+     "case": "walk",
+     "cmd_vx": 0.2,
+     "cmd_dz_mm": 0,
+     "cmd_roll_deg": 0.0,
+     "cmd_pitch_deg": 0.0,
+     "dz_mm": 0.0,
+     "roll_deg": 0.0,
+     "pitch_deg": 0.0,
+     "vx": 0.20494768023490906,
+     "fell": 0.0
+    },
+    {
+     "case": "crouch -20 mm",
+     "cmd_vx": 0.2,
+     "cmd_dz_mm": -20.0,
+     "cmd_roll_deg": 0.0,
+     "cmd_pitch_deg": 0.0,
+     "dz_mm": -19.234298706054688,
+     "roll_deg": -0.003737837076187134,
+     "pitch_deg": 1.7544753551483154,
+     "vx": 0.0018277965718880296,
+     "fell": 0.0
+    },
+    {
+     "case": "roll +10",
+     "cmd_vx": 0.2,
+     "cmd_dz_mm": 0,
+     "cmd_roll_deg": 10.0,
+     "cmd_pitch_deg": 0.0,
+     "dz_mm": -0.8256733417510986,
+     "roll_deg": 10.978253364562988,
+     "pitch_deg": 0.892534077167511,
+     "vx": 0.00013317710545379668,
+     "fell": 0.0
+    },
+    {
+     "case": "roll -10",
+     "cmd_vx": 0.2,
+     "cmd_dz_mm": 0,
+     "cmd_roll_deg": -10.0,
+     "cmd_pitch_deg": 0.0,
+     "dz_mm": -0.3727450966835022,
+     "roll_deg": -8.76791000366211,
+     "pitch_deg": 0.7775833606719971,
+     "vx": 0.00011243108747294173,
+     "fell": 0.0
+    },
+    {
+     "case": "pitch +10",
+     "cmd_vx": 0.2,
+     "cmd_dz_mm": 0,
+     "cmd_roll_deg": 0.0,
+     "cmd_pitch_deg": 10.0,
+     "dz_mm": -0.14022737741470337,
+     "roll_deg": 0.9867730736732483,
+     "pitch_deg": 10.911084175109863,
+     "vx": 5.571892688749358e-05,
+     "fell": 0.0
+    },
+    {
+     "case": "pitch -10",
+     "cmd_vx": 0.2,
+     "cmd_dz_mm": 0,
+     "cmd_roll_deg": 0.0,
+     "cmd_pitch_deg": -10.0,
+     "dz_mm": -0.5195364356040955,
+     "roll_deg": 0.8185958862304688,
+     "pitch_deg": -9.795021057128906,
+     "vx": 0.0001163288252428174,
+     "fell": 0.0
+    }
+   ],
+   "seed": 0,
+   "summary": {
+    "walk_crouch_mm_for_-20": -19.234298706054688,
+    "walk_roll_deg_for_10": 9.873081684112549,
+    "walk_pitch_deg_for_10": 10.353052616119385,
+    "walk_speed_ratio_body": 0.002191244628259625,
+    "walk_body_fell": 0.0
+   }
+  }
+ ],
+ "aggregate": {
+  "walk_body_fell": {
+   "mean": 0.0,
+   "std": 0.0,
+   "n": 1
+  },
+  "walk_crouch_mm_for_-20": {
+   "mean": -19.234298706054688,
+   "std": 0.0,
+   "n": 1
+  },
+  "walk_pitch_deg_for_10": {
+   "mean": 10.353052616119385,
+   "std": 0.0,
+   "n": 1
+  },
+  "walk_roll_deg_for_10": {
+   "mean": 9.873081684112549,
+   "std": 0.0,
+   "n": 1
+  },
+  "walk_speed_ratio_body": {
+   "mean": 0.002191244628259625,
+   "std": 0.0,
+   "n": 1
+  }
+ },
+ "seconds": 84.74719572067261
+}

@@ -524,6 +524,38 @@ of the range) plus an additive fine linear-velocity term and more high-speed com
 both numbers before any distillation; the 0.3 rad/s dead zone goes to the runtime command remap
 unless that teacher opens it.
 
+## Second skill through the loop: crouch / tilt while walking (2026-10-19 01:30)
+
+First run of the experiment loop as one tool ([`scripts/lab.py`](../scripts/lab.py), spec
+[`experiments/bodywalk_v1.toml`](../experiments/bodywalk_v1.toml)), on a new skill, following
+[docs/method.md](method.md): measure first, then fix the gate, then train.
+
+**Measured first.** Upstream zeroes body commands whenever the twist command walks, so no policy has seen
+one while walking. A new exam trial, `bodywalk`, lets them through for every duck (for the trial only):
+walk at 0.20 m/s, then crouch −20 mm or tilt ±10° (half the standing range), compared per duck with the same
+walk under a zero body command (raw JSON in `results/benchmark/bodywalk_baseline/`):
+
+| walking 0.20 m/s + | v4 (default) | C (fast) | S3 |
+|---|---|---|---|
+| no body command: speed | 0.12 m/s | 0.20 m/s | 0.22 m/s |
+| crouch −20 mm: height change / speed | −17.7 mm / 0.03 | −19.2 mm / 0.00 | −16.7 mm / 0.00 |
+| roll ±10°: achieved / speed | +10.5 / −9.0° / 0.00 | +11.0 / −8.8° / 0.00 | +11.5 / −8.5° / 0.00 |
+| pitch ±10°: achieved / speed | +9.5 / −10.5° / 0.00 | +10.9 / −9.8° / 0.00 | +11.4 / −8.9° / 0.00 |
+
+Every policy **stops walking** as soon as a body command arrives, then poses well. The policies learned
+"a body command means standing" — which is what they were trained on. The skill to learn is both at once.
+
+**Change** (`MICRODUCK_BODY_WALK=<p>`, in `patches/all-in-one.patch`, off by default): a share p of the envs
+keeps its body command while walking, at half range; the body-tracking reward pays those envs too (walking
+with a zero body command stays untaxed, as upstream); their frames leave the walk-teacher imitation (the walk
+teacher does not crouch) and never go to the stand-up teacher (it does not walk) — PPO and the reward only.
+
+**Run**: v4 `model_2999` resumed for 1 500 iterations with p = 0.3, sweep 3500–4498 (tracking, push,
+bodywalk), pick by a `bodywalk` score, 3-seed exam with the new trial. **Gate, fixed before the run**:
+speed while posing ≥ 80 % of the plain walk, crouch ≤ −14 mm for −20, roll and pitch ≥ 7° for ±10°, no falls
+(≤ 2 %), and no regression against v4: worst push cell ≥ 94 %, get-up ≥ 98 %, standing crouch ≤ −27 mm, speed
+at 0.30 ≥ 0.17 m/s, pushed goal ≥ 95 %. Result: below once the run finishes.
+
 ## Search for fast *and* robust: the anchor weight is the trade knob (2026-10-18 23:10)
 
 Automated round after release v0.2 ([`scripts/pipeline_round7_release_prep_and_search.sh`](../scripts/pipeline_round7_release_prep_and_search.sh)

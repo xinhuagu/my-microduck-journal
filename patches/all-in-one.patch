@@ -1,14 +1,8 @@
-Every local change to upstream microduck_rl (ceca0170) in one diff, as used for the v0.2 runs: git apply patches/all-in-one.patch
+Every local change to upstream microduck_rl (ceca0170) in one diff: git apply patches/all-in-one.patch
 All changes are behind environment variables and default off (MICRODUCK_*; see docs/training-log.md). The per-feature
 patches next to this file are the same changes split by topic; this one also holds the later knobs
-(MICRODUCK_EXPERT_BC_COEF, MICRODUCK_GROUND_MIX, MICRODUCK_SPEED_FINE_W, MICRODUCK_ANCHOR_COEF).
+(MICRODUCK_EXPERT_BC_COEF, MICRODUCK_GROUND_MIX, MICRODUCK_SPEED_FINE_W, MICRODUCK_ANCHOR_COEF, MICRODUCK_BODY_WALK).
 
- scripts/infer_policy.py                            |   2 +-
- src/mjlab_microduck/tasks/mdp.py                   | 120 +++++++++++++++++++++
- .../tasks/microduck_standup_env_cfg.py             |  59 ++++++++++
- .../tasks/microduck_velocity_env_cfg.py            |  34 ++++++
- .../tasks/microduck_velstand_env_cfg.py            |  25 ++++-
- 5 files changed, 238 insertions(+), 2 deletions(-)
 diff --git a/scripts/infer_policy.py b/scripts/infer_policy.py
 index 7b368df0..ddba6677 100755
 --- a/scripts/infer_policy.py
@@ -22,11 +16,109 @@ index 7b368df0..ddba6677 100755
  BODY_CMD_MAX_XY = 0.02             # ±20 mm
  BODY_CMD_MAX_ANGLE = math.radians(30)  # ±30°
  
+diff --git a/src/mjlab_microduck/tasks/distill.py b/src/mjlab_microduck/tasks/distill.py
+index 7c1c8c82..b2bcf0d7 100644
+--- a/src/mjlab_microduck/tasks/distill.py
++++ b/src/mjlab_microduck/tasks/distill.py
+@@ -124,17 +124,22 @@ def turn_in_place_mask(obs: torch.Tensor, twist_slice: tuple[int, int], eps: flo
+ def body_frame_masks(
+     obs: torch.Tensor, twist_slice: tuple[int, int], body_slice: tuple[int, int],
+     active_axes: tuple[int, ...], no_teacher_axes: tuple[int, ...], eps: float = 1e-6,
++    walk_frames: bool = False,
+ ) -> tuple[torch.Tensor, torch.Tensor]:
+     """(body frames → off the walk anchor, teach frames → stand expert). Command obs carry
+-    no noise, so "twist == 0" and "axis == 0" are exact tests."""
++    no noise, so "twist == 0" and "axis == 0" are exact tests.
++    walk_frames (my-microduck-journal, MICRODUCK_BODY_WALK): walking frames with an active body command
++    are taken off the walk anchor as well (the walk expert does not crouch or tilt); they are never
++    taught by the stand expert (it does not walk) — PPO and the tracking reward only."""
+     standing = obs[:, twist_slice[0]:twist_slice[1]].abs().amax(dim=1) <= eps
+     body = obs[:, body_slice[0]:body_slice[1]]
+     active = body[:, list(active_axes)].abs().amax(dim=1) > eps
+-    frames = standing & active
++    standing_body = standing & active
++    frames = active if walk_frames else standing_body
+     if no_teacher_axes:
+-        frames_teach = frames & (body[:, list(no_teacher_axes)].abs().amax(dim=1) <= eps)
++        frames_teach = standing_body & (body[:, list(no_teacher_axes)].abs().amax(dim=1) <= eps)
+     else:
+-        frames_teach = frames
++        frames_teach = standing_body
+     return frames, frames_teach
+ 
+ 
+@@ -203,7 +208,8 @@ class PpoWithExpertBc(PPO):
+         body_teach = torch.zeros_like(fallen)
+         if cfg.get("body_slice") is not None:
+             body_frames, body_teach = body_frame_masks(flat, tuple(cfg["twist_slice"]), tuple(cfg["body_slice"]),
+-                                                       tuple(cfg["body_active_axes"]), tuple(cfg["body_no_teacher_axes"]))
++                                                       tuple(cfg["body_active_axes"]), tuple(cfg["body_no_teacher_axes"]),
++                                                       walk_frames=bool(cfg.get("body_walk", False)))
+             upright = upright & ~body_frames
+             body_teach = body_teach & ~fallen
+         turn_free = torch.zeros_like(fallen)
 diff --git a/src/mjlab_microduck/tasks/mdp.py b/src/mjlab_microduck/tasks/mdp.py
-index 85d642c5..a4869cfb 100644
+index 85d642c5..57897c68 100644
 --- a/src/mjlab_microduck/tasks/mdp.py
 +++ b/src/mjlab_microduck/tasks/mdp.py
-@@ -7669,3 +7669,123 @@ def roulade_lateral_velocity_penalty(
+@@ -5341,12 +5341,17 @@ class StandingGatedPoseCommand(UniformPoseCommand):
+     def __init__(self, cfg: "StandingGatedPoseCommandCfg", env: ManagerBasedRlEnv):
+         super().__init__(cfg, env)
+         self._raw = torch.zeros_like(self._command)
++        # my-microduck-journal (MICRODUCK_BODY_WALK): envs whose body command stays on while walking
++        self._walk_ok = torch.zeros(self._command.shape[0], dtype=torch.bool, device=self.device)
+ 
+     def _gate(self) -> None:
+         twist = self._env.command_manager.get_term(self.cfg.twist_command_name)
+         standing = getattr(twist, "is_standing_env", None)
+         if standing is None:
+             self._command[:] = 0.0
++        elif self.cfg.walk_keep_prob > 0.0:
++            mask = standing.float() + (~standing & self._walk_ok).float() * self.cfg.walk_scale
++            self._command[:] = self._raw * mask.unsqueeze(1)
+         else:
+             self._command[:] = self._raw * standing.float().unsqueeze(1)
+ 
+@@ -5363,6 +5368,8 @@ class StandingGatedPoseCommand(UniformPoseCommand):
+             if p > 0.0:
+                 raw[torch.rand(n, device=self.device) < p, i] = 0.0
+         self._raw[env_ids] = raw
++        if self.cfg.walk_keep_prob > 0.0:
++            self._walk_ok[env_ids] = torch.rand(n, device=self.device) < self.cfg.walk_keep_prob
+         self._gate()  # resets don't run _update_command: keep the walking-zero invariant
+ 
+ 
+@@ -5370,6 +5377,10 @@ class StandingGatedPoseCommand(UniformPoseCommand):
+ class StandingGatedPoseCommandCfg(UniformPoseCommandCfg):
+     twist_command_name: str = "twist"
+     axis_zero_prob: tuple[float, ...] = ()
++    # my-microduck-journal (MICRODUCK_BODY_WALK): share of envs that keep their body command while walking,
++    # scaled by walk_scale (0 = upstream behaviour: exact zero while walking)
++    walk_keep_prob: float = 0.0
++    walk_scale: float = 1.0
+ 
+     def build(self, env: ManagerBasedRlEnv) -> "StandingGatedPoseCommand":
+         return StandingGatedPoseCommand(self, env)
+@@ -5765,6 +5776,7 @@ def body_pose_tracking_locomotion(
+     standing_gate_command_name: str | None = None,
+     asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+     feet_cfg: SceneEntityCfg = SceneEntityCfg("robot", site_names=("left_foot", "right_foot")),
++    body_active_gate: bool = False,
+ ) -> torch.Tensor:
+     """Locomotion-aware 6D body pose tracking.
+ 
+@@ -5861,6 +5873,10 @@ def body_pose_tracking_locomotion(
+     # so body tracking never taxes the gait.
+     if standing_gate_command_name is not None:
+         standing = getattr(env.command_manager.get_term(standing_gate_command_name), "is_standing_env", None)
++        if standing is not None and body_active_gate:
++            # my-microduck-journal (MICRODUCK_BODY_WALK): also pay walking envs whose body command is active
++            # (z / roll / pitch non-zero); walking with a zero body command stays untaxed, as upstream
++            standing = standing | (cmd[:, 2:5].abs().amax(dim=1) > 0.0)
+         reward = reward * (standing.float() if standing is not None else 0.0)
+ 
+     return reward
+@@ -7669,3 +7685,123 @@ def roulade_lateral_velocity_penalty(
      """Body-frame lateral (y) linear velocity² — keeps the roll straight."""
      asset: Entity = env.scene[asset_cfg.name]
      return torch.nan_to_num(asset.data.root_link_lin_vel_b[:, 1].pow(2), nan=0.0)
@@ -280,7 +372,7 @@ index 45a1f6d5..c953d104 100644
      # Head pose command (4D deltas from HOME, in joint order:
      #   neck_pitch, head_pitch, head_yaw, head_roll). Tracked as a primary
 diff --git a/src/mjlab_microduck/tasks/microduck_velstand_env_cfg.py b/src/mjlab_microduck/tasks/microduck_velstand_env_cfg.py
-index 929c4bb2..e266c09a 100644
+index 929c4bb2..139e7f92 100644
 --- a/src/mjlab_microduck/tasks/microduck_velstand_env_cfg.py
 +++ b/src/mjlab_microduck/tasks/microduck_velstand_env_cfg.py
 @@ -216,6 +216,7 @@ Phases (as before, but with a recovery backstop):
@@ -300,7 +392,7 @@ index 929c4bb2..e266c09a 100644
  EXPERT_BC_GATE_TILT_DEG = 35.0
  
  # Body control (2026-10, branch improve_velstand2). The deployed velstand ignores
-@@ -328,6 +329,14 @@ BODY_ZERO_CMD_PROB = 0.3
+@@ -328,6 +329,20 @@ BODY_ZERO_CMD_PROB = 0.3
  BODY_Z_ZERO_PROB = 0.5             # share of body commands that are tilt-only (→ teachable)
  BODY_TRACK_WEIGHT = 2.0
  BODY_RANGE_STAGES_ITERS = (0, 300)  # half range → full range (warm start: iters of THIS run)
@@ -312,10 +404,16 @@ index 929c4bb2..e266c09a 100644
 +    BODY_CMD_Z_RANGE = (-0.040, 0.020)
 +    BODY_TRACK_WEIGHT = 3.0
 +    BODY_RANGE_STAGES_ITERS = (0, 600)
++# Local tweak (my-microduck-journal): MICRODUCK_BODY_WALK=<p> — body commands while walking. A share p of
++# envs keeps its body command when the twist command walks, at half range (crouch -20 mm, tilt +-10 deg with
++# BODY_WIDE); the tracking reward pays those envs too, and distill takes their frames off the walk anchor
++# (the walk teacher does not crouch). 0 / unset = upstream: exact zero while walking.
++BODY_WALK = float(os.environ.get("MICRODUCK_BODY_WALK", "0") or 0)
++BODY_WALK_SCALE = 0.5
  # Leg pose stds while a body command is active (standing). The standing stds (hip_roll
  # 0.05, knee/hip_pitch 0.15, ankle 0.1) priced a 10° commanded roll at -0.85/step.
  BODY_POSE_STD = {
-@@ -425,6 +434,14 @@ PRONE_RAMP_STAGES = [
+@@ -425,6 +440,14 @@ PRONE_RAMP_STAGES = [
      {"step": _PRONE_ITERS[2] * NUM_STEPS_PER_ENV, "params": {"prone_prob": 0.30, "face_down_prob": 0.65, "side_prob": PRONE_SIDE_PROB, "crouch_prob": 0.20}},
      {"step": _PRONE_ITERS[3] * NUM_STEPS_PER_ENV, "params": {"prone_prob": 0.45, "face_down_prob": 0.50, "side_prob": PRONE_SIDE_PROB, "crouch_prob": 0.20}},
  ]
@@ -330,7 +428,28 @@ index 929c4bb2..e266c09a 100644
  
  
  def _collapse_curricula_to_final(cfg: ManagerBasedRlEnvCfg) -> None:
-@@ -878,7 +895,13 @@ MicroduckVelStandRlCfg = RslRlOnPolicyRunnerCfg(
+@@ -467,7 +490,12 @@ def _add_body_control(cfg: ManagerBasedRlEnvCfg, play: bool) -> None:
+         zero_command_prob=BODY_ZERO_CMD_PROB,
+         axis_zero_prob=(0.0, 0.0, BODY_Z_ZERO_PROB, 0.0, 0.0, 0.0),
+         twist_command_name="twist",
++        walk_keep_prob=BODY_WALK,
++        walk_scale=BODY_WALK_SCALE,
+     )
++    if BODY_WALK > 0.0:
++        print(f"[velstand] MICRODUCK_BODY_WALK: {BODY_WALK:.2f} of envs keep their body command while walking, "
++              f"at {BODY_WALK_SCALE:.1f}x range; tracking reward and distill routing follow")
+     assert list(cfg.commands).index("twist") < list(cfg.commands).index("body_pose"), "twist must be computed first"
+     cfg.curriculum.pop("body_pose_range", None)
+     if not play:
+@@ -491,6 +519,7 @@ def _add_body_control(cfg: ManagerBasedRlEnvCfg, play: bool) -> None:
+             "angle_std": math.radians(5),
+             "axis_weights": (0.0, 0.0, 1.0, 1.0, 1.0, 0.0),
+             "standing_gate_command_name": "twist",
++            **({"body_active_gate": True} if BODY_WALK > 0.0 else {}),
+         },
+     )
+     pose = cfg.rewards["pose"]
+@@ -878,7 +907,14 @@ MicroduckVelStandRlCfg = RslRlOnPolicyRunnerCfg(
          symmetry_cfg=None,
          bc_cfg={
              **default_bc_cfg(), "coef": EXPERT_BC_COEF, "gate_tilt_deg": EXPERT_BC_GATE_TILT_DEG,
@@ -341,6 +460,7 @@ index 929c4bb2..e266c09a 100644
 +            **({"anchor_coef": float(os.environ["MICRODUCK_ANCHOR_COEF"])} if os.environ.get("MICRODUCK_ANCHOR_COEF") else {}),
              **({"body_slice": (55, 61)} if ENABLE_BODY_CONTROL else {}),
 +            **({"body_no_teacher_axes": ()} if os.environ.get("MICRODUCK_BODY_WIDE") else {}),
++            **({"body_walk": True} if BODY_WALK > 0.0 else {}),
              **({"unanchor_turn_in_place": True} if ENABLE_YAW_FIX else {}),
          } if ENABLE_EXPERT_BC else None,
      ),

@@ -1,0 +1,15 @@
+# Shared settings of the default walk + get-up policy (v4 = velstand_default.onnx). Paths are relative to
+# microduck_rl; the run directories are the ones on the machine that ran them (docs/training-log.md).
+
+task = "Mjlab-VelStand-Rough-Backlash-MicroDuck"
+eval_task = "Mjlab-VelStand-Flat-MicroDuck"
+num_envs = 4096
+
+[env]
+MICRODUCK_BODY_WIDE = "1"       # body-wide.patch: crouch / tilt commands
+MICRODUCK_STAND_EXPERT = "logs/rsl_rl/microduck_stand/2026-10-11_17-53-45_microduck_stand/model_2999.pt"   # stand-up teacher v3
+MICRODUCK_WALK_ANCHOR = "logs/rsl_rl/velocity/2026-09-07_20-38-41_first-walk/model_10000.pt"            # walk teacher v1
+
+[exam]
+trials = "getup,push,tracking,body,goal"
+seeds = "0,1,2"

@@ -409,6 +409,49 @@ def trial_body(duck: Duck, seconds: float = 5.0):
     return rows
 
 
+def trial_bodywalk(duck: Duck, seconds: float = 6.0, vx: float = 0.20):
+    """Body commands while walking at vx: crouch -20 mm, roll / pitch +-10 deg (half the standing range).
+    Upstream zeroes body commands while walking; this trial lets them through for every env (the command's
+    walking gate is bypassed for the trial only), so any policy can be measured. Each case is compared with
+    the same walk under a zero body command (per env, mean over the last 3 s)."""
+    if "body_pose" not in duck.cm.active_terms:
+        return []
+    b = duck.cm.get_term("body_pose")
+    if not hasattr(b, "_raw"):
+        return []
+
+    def through():
+        b._command[:] = b._raw
+    b._gate = through   # instance attribute shadows the class method while the trial runs
+    r10 = math.radians(10)
+    cases = [("walk", 0, 0, 0), ("crouch -20 mm", -0.02, 0, 0), ("roll +10", 0, r10, 0), ("roll -10", 0, -r10, 0),
+             ("pitch +10", 0, 0, r10), ("pitch -10", 0, 0, -r10)]
+    rows, ref = [], None
+    try:
+        for label, dz, roll, pitch in cases:
+            duck.spawn("upright")
+            duck.set_twist(vx, 0, 0, standing=False)
+            duck.set_body(0, 0, 0)
+            duck.rollout(2.0)
+            duck.set_body(dz, roll, pitch)
+            tr = duck.rollout(seconds)
+            last = slice(-int(round(3.0 / duck.dt)), None)
+            z, r, p = tr["z"][last].mean(0), tr["roll"][last].mean(0), tr["pitch"][last].mean(0)
+            if ref is None:
+                ref = (z, r, p)
+            rows.append({
+                "case": label, "cmd_vx": vx, "cmd_dz_mm": dz * 1000, "cmd_roll_deg": math.degrees(roll), "cmd_pitch_deg": math.degrees(pitch),
+                "dz_mm": float(((z - ref[0]) * 1000).median()),
+                "roll_deg": float((r - ref[1]).median()),
+                "pitch_deg": float((p - ref[2]).median()),
+                "vx": float(tr["vx"][last].mean()),
+                "fell": float((tr["tilt"] > 45.0).any(0).float().mean()),
+            })
+    finally:
+        del b._gate
+    return rows
+
+
 # ----------------------------------------------------------------------------- goal reaching (navigation layer)
 GOAL_DIST = 1.5          # m from the spawn point, random bearing
 GOAL_TOL = 0.10          # m: "reached" when inside this for 1 s
@@ -504,6 +547,8 @@ def run_trials(duck: Duck, only: set[str]) -> dict:
             out["tracking"] = trial_tracking(duck)
         if "body" in only:
             out["body"] = trial_body(duck)
+        if "bodywalk" in only:
+            out["bodywalk"] = trial_bodywalk(duck)
         if "goal" in only:
             out["goal"] = trial_goal(duck)
     return out
@@ -542,6 +587,18 @@ def summarize(res: dict) -> dict:
             s["pitch_deg_for_20"] = (by["pitch +20"]["pitch_deg"] - by["pitch -20"]["pitch_deg"]) / 2
         if "roll +10" in by and "roll -10" in by:
             s["roll_deg_for_10"] = (by["roll +10"]["roll_deg"] - by["roll -10"]["roll_deg"]) / 2
+    bw = res.get("bodywalk")
+    if bw:
+        by = {r["case"]: r for r in bw}
+        if "crouch -20 mm" in by: s["walk_crouch_mm_for_-20"] = by["crouch -20 mm"]["dz_mm"]
+        if "roll +10" in by and "roll -10" in by:
+            s["walk_roll_deg_for_10"] = (by["roll +10"]["roll_deg"] - by["roll -10"]["roll_deg"]) / 2
+        if "pitch +10" in by and "pitch -10" in by:
+            s["walk_pitch_deg_for_10"] = (by["pitch +10"]["pitch_deg"] - by["pitch -10"]["pitch_deg"]) / 2
+        if "walk" in by and by["walk"]["vx"] > 1e-3:
+            body = [r["vx"] for r in bw if r["case"] != "walk"]
+            s["walk_speed_ratio_body"] = sum(body) / len(body) / by["walk"]["vx"]
+        s["walk_body_fell"] = max(r["fell"] for r in bw)
     g = res.get("goal")
     if g:
         for r in g:
@@ -586,6 +643,10 @@ def print_tables(res: dict):
         print("\n| case | dz mm | roll ° | pitch ° | fell |\n|---|---|---|---|---|")
         for r in res["body"]:
             print(f"| {r['case']} | {r['dz_mm']:+.1f} | {r['roll_deg']:+.1f} | {r['pitch_deg']:+.1f} | {fmt_pct(r['fell'])} |")
+    if res.get("bodywalk"):
+        print("\n| walking 0.20 m/s + | dz mm | roll ° | pitch ° | vx | fell |\n|---|---|---|---|---|---|")
+        for r in res["bodywalk"]:
+            print(f"| {r['case']} | {r['dz_mm']:+.1f} | {r['roll_deg']:+.1f} | {r['pitch_deg']:+.1f} | {r['vx']:.2f} | {fmt_pct(r['fell'])} |")
     if "goal" in res:
         print(f"\n| goal {GOAL_DIST} m | reached | median s | p90 s | final dist (median) | fell | reached of fallen | stop drift (median) |\n|---|---|---|---|---|---|---|---|")
         for r in res["goal"]:

@@ -60,3 +60,14 @@ compare = ["logs/eval/<other>.json"]     # printed next to this experiment's ver
 |---|---|
 | `_velstand_fast_base.toml` | the fast walk + get-up setup shared by candidate C and the search (teachers, patches, sweep and exam) |
 | `s5_anchor_075_expert_x5.toml` | S5 written as a spec: produces the same training command as `scripts/pipeline_round8_anchor_075.sh` |
+| `_velstand_default_base.toml` | the default policy's setup (v4: walk teacher v1, stand-up teacher v3, body-wide) |
+| `bodywalk_v1.toml` | the second skill: crouch / tilt while walking, with its own gate in `[gate.bars]` |
+
+A gate can be the release gate (default) or a list of bars in the spec — any metric of the exam, plus
+`push_worst` (the worst of the four push-recovery cells):
+
+```toml
+[gate.bars]
+walk_speed_ratio_body = ">= 0.8"
+push_worst = ">= 0.94"
+```
