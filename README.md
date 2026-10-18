@@ -72,6 +72,14 @@ In short: the default is level with or ahead of the official policy on every col
 which no official policy does; the fast variant walks at the commanded speed and turns on the spot,
 at the cost of a few points of push recovery.
 
+![Speed vs push recovery for every walk + get-up policy measured here](results/tradeoff.png)
+
+*Every walk + get-up policy measured with 3 seeds. Right is faster, up recovers more push falls (worst of
+the four cells, the number the release gate checks), colour is turning. The fast policies (right) have
+climbed from 83 % (A) to 92 % (C, released) to 95 % (S3, on the gate's edge, but turning only 0.51);
+none is inside the box yet with turning intact. Built by [`scripts/plot_tradeoff.py`](scripts/plot_tradeoff.py)
+from the raw JSON.*
+
 ## What is different from the official setup
 
 | | Official | Here |

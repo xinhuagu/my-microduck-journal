@@ -97,11 +97,23 @@ Battery, 3 seeds (`model_2250`, picked by battery sweep over 2000–2999):
   variant. Against the official policy C is level on push recovery and ahead on get-up, speed,
   turning, crouch and time to goal.
 
-The next round (running) resumes from C with one change per variant (anchor weight halved, stand-up
-imitation ×5, both, speed term at half weight) and ranks them with the same battery
-([`scripts/search_board.py`](../scripts/search_board.py)).
+The next round resumed C with one change per variant (anchor weight halved, stand-up imitation ×5,
+both, speed term at half weight) and ranked them with the same battery
+([`scripts/search_board.py`](../scripts/search_board.py)) — section 5.
 
-## 5. Method notes that held up
+## 5. The trade-off, in one picture
+
+![Speed vs push recovery for every walk + get-up policy measured here](../results/tradeoff.png)
+
+After C, an automated search resumed C with one change per run (see the training log). Halving the
+walk-anchor weight and imitating the stand-up teacher ×5 (S3) reaches 95–96 % in every push cell at
+0.30 m/s, but turns only 0.51 for 0.6 rad/s; the same with the anchor at ×0.75 (S5) turns 0.56 and
+crouches again, but drops back to 93–95 %; full anchor weight (S2) turns 0.75 and recovers 92.5–95 %.
+The anchor weight slides a policy along this edge, steeply: no single global weight gives both.
+**Take-away:** when one knob trades two goals that steeply, stop tuning the knob and separate the
+goals — here, e.g., an anchor weight that depends on whether a turn is commanded.
+
+## 6. Method notes that held up
 
 - **Pick checkpoints by battery, never "the last one".** Push recovery peaked mid-run and dropped again
   in v6 (0.86 at 2250, 0.80 at 2750–2999) while speed stayed flat.
@@ -114,7 +126,7 @@ imitation ×5, both, speed term at half weight) and ranks them with the same bat
   log are the *shares* of frames each imitation term sees, not imitation losses; the loss is
   `Mean expert_bc loss` and scales with the coefficient.
 
-## Reproduce
+## 7. Reproduce
 
 Upstream `microduck_rl` at `ceca0170`, then `git apply patches/all-in-one.patch` (every change is
 behind a `MICRODUCK_*` environment variable and off by default). The pipelines that ran these rounds
