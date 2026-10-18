@@ -20,3 +20,6 @@ Thumbs.db
 .vscode/
 .idea/
 __pycache__/
+
+# release folder the release-prep pipeline writes next to its script
+scripts/release-v0.2/
