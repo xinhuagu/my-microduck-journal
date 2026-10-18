@@ -570,6 +570,22 @@ Reading:
   gets 2 mm shallower is not clear yet. Next: the same as S3 with the anchor at 0.75 instead of 0.5,
   judged by the same gate.
 
+**S5 = anchor ×0.75 + imitation ×5** (2026-10-19 01:00, [`pipeline_round8_anchor_075.sh`](../scripts/pipeline_round8_anchor_075.sh);
+resume of C `2250`, 1 000 iterations, sweep 2500–3249 → `model_2750`, 3 seeds):
+
+| anchor weight (imitation ×5) | push recovered, standing 1.0 / 1.2, walking 1.0 / 1.2 m/s | turn at 0.6 | crouch for −30 mm | pushed goal | gate |
+|---|---|---|---|---|---|
+| ×0.5 (S3 `2500`) | 96.1 / 95.0 / 95.2 / 95.7 % | 0.51 | −26.6 | 97.0 % | FAIL: turn, crouch |
+| **×0.75 (S5 `2750`)** | 95.5 / **94.2 / 93.5 / 93.1 %** | **0.56** | **−27.6** | 95.2 % | FAIL: three push cells, pushed goal |
+| ×1.0 (S2 `3000`) | 94.3 / 92.5 / 95.0 / 93.9 % | 0.75 | −28.5 | 96.5 % | FAIL: push |
+
+S5 gets turning (0.56, ±1.0 → 0.99 / −1.05) and the crouch back, with get-up 99.0 % (face-up 98.2 %),
+0.30 m/s and the 1.5 m goal in 6.3 s — but push recovery falls most of the way back to S2's level.
+The trade is steep, not linear: the push-recovery gain of S3 needs the anchor at about half weight,
+and turning needs it near full weight. No single anchor weight satisfies both under this setup, so
+the next lever has to separate them — e.g. an anchor weight that depends on the command (full while
+a turn is commanded, half otherwise) rather than one global number.
+
 ## Candidate C and release v0.2 (2026-10-18 14:40)
 
 A's configuration (v4 warm-started, anchor = walk teacher v3, `MICRODUCK_SPEED_FINE_W=0`) plus the two
@@ -963,4 +979,5 @@ sweep → push tests and all three probes on the pick. Checkpoints are now chose
 12. Fillers for idle GPU time: ablation of the stand-straight fix; episodic tricks — forward roll
     started 2026-10-15 (paused at iteration 301), one-leg stand, bow.
 13. Fast *and* robust: first search done (2026-10-18 23:10) — S3 (anchor ×0.5 + stand-up imitation ×5)
-    passes every push cell but misses turning and crouch; next: anchor ×0.75 + imitation ×5.
+    passes every push cell but misses turning and crouch; S5 (anchor ×0.75) gets turning and crouch
+    back and loses the push cells again. Next lever: a command-dependent anchor weight.
