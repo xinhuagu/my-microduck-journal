@@ -1,266 +1,240 @@
 # my-microduck-journal
 
 **A public, verifiable and continuable route to the Microduck's skills.** Every policy here was
-trained from scratch on one consumer PC (an RTX 50-series card under WSL2 on Windows 11), without
-the private teacher checkpoints the official recipe depends on, and is measured with an open
-benchmark against the official policies. The point is not the checkpoints — it is that the whole
-path is open: the teachers, the patches, the exact scripts and checkpoint picks, the evaluation,
-and every number and dead end along the way, so that anyone with a single consumer GPU can
-reproduce it, verify it, or continue training from it. The exact card and the times it gave are in
-the hardware table below; a 16 GB card runs the same recipe with half the parallel environments
-and proportionally more time.
+trained from scratch on one consumer PC (an RTX 50-series card, WSL2 on Windows 11), without the
+private teacher checkpoints the official recipe depends on, and is measured against the official
+policies with an open benchmark. The point is not the checkpoints — it is that the whole path is
+open: teachers, patches, exact scripts, checkpoint picks, evaluation, and every number and dead end,
+so that anyone with one consumer GPU can reproduce it, check it, or continue from it.
 
-## Why train your own
+<table>
+<tr>
+<td width="50%"><img src="results/goal-v02-fast-push-getup-walk-stop.gif" alt="velstand_fast.onnx: pushed over on the way to a goal, gets up, walks on, stops"></td>
+<td width="50%"><img src="results/goal-v4-push-getup-walk-stop.gif" alt="velstand_default.onnx (v4): the same exam"></td>
+</tr>
+<tr>
+<td><b>Fast variant</b> (<code>velstand_fast.onnx</code>): pushed at 1.0 m/s on the way to a goal 1.5 m away, up again, on target at 7.5 s</td>
+<td><b>Default</b> (<code>velstand_default.onnx</code>, v4): the same exam, on target at 8.4 s</td>
+</tr>
+</table>
 
-The skills that come with the robot are finished ONNX files, and the viewer can even chain two of
-them (walk while a velocity is commanded, stand up when it is zero). That is enough to *watch* a duck
-get up. It is not enough to *change* anything:
+## Contents
 
-- **The shipped policies are end points, not starting points.** The basic skills (walking,
-  stand-up) train from scratch with the public recipe. The *composite* ones do not: VelStand (walk +
-  get-up in one network) is distilled from, and warm-started on, teacher checkpoints that live in a
-  private wandb project, and the official training command stops with an HTTP 403 without them. So
-  the first job here was to rebuild those teachers; after that, composite skills can be trained on
-  this PC too.
-- **What you don't like, you can fix.** The first fall-recovery policy trained here "stood up" into
-  a 34° forward lean. Owning the teacher meant changing its reward
-  ([`patches/standup-stand-straight.patch`](patches/standup-stand-straight.patch)) and re-training,
-  instead of living with it.
-- **Training budget becomes a choice.** The stand-up teacher here has 13 500 iterations against the
-  ≈ 10 000 of the upstream checkpoint it replaces; VelStand v2 gets 6 000 on top of a
-  10 000-iteration walk, then 3 000 more on rough terrain with actuator backlash. On one consumer
-  GPU each of those is a few hours.
-- **One network instead of a hand-off.** Chaining walk + stand-up in the viewer switches networks in
-  the middle of a fall. VelStand learns both in one network, which is what runs on the real robot,
-  and training it is exactly what needs the teachers above.
-- **Reproducible from the record.** Offline wandb, the exact scripts in `scripts/`, every number
-  and dead end in `docs/`, so the next person needs neither the private project nor a workstation.
-  (Still missing: the checkpoints themselves and a fixed-seed evaluation — see Status.)
+1. [At a glance](#at-a-glance)
+2. [Results against the official policies](#results-against-the-official-policies)
+3. [What is different from the official setup](#what-is-different-from-the-official-setup)
+4. [Status](#status)
+5. [How it was built](#how-it-was-built)
+6. [What we learned](#what-we-learned)
+7. [Get the policies](#get-the-policies)
+8. [Reproduce it](#reproduce-it)
+9. [Repository layout](#repository-layout)
+10. [Hardware and timings](#hardware-and-timings)
 
-What is different from the official setup:
+## At a glance
 
-| | Official (upstream) | Here |
+- **Policies you can use** — [release v0.2](https://github.com/xinhuagu/my-microduck-journal/releases/tag/v0.2):
+  one network that walks, gets up from any fall and crouches / tilts on command, in two versions:
+  `velstand_default.onnx` (most robust) and `velstand_fast.onnx` (walks at the commanded speed).
+- **Measured, not claimed** — one open exam ([`docs/benchmark.md`](docs/benchmark.md)) runs any
+  policy through the same 256 randomised ducks × 3 seeds: get-up, push recovery, speed, turning,
+  body commands, walking to a goal. The official policies are in the same table.
+- **The whole route** — own walk and stand-up teachers, the config patches against upstream, the
+  exact pipeline scripts, and a log of every run including the ones that went wrong
+  ([`docs/training-log.md`](docs/training-log.md)).
+- **Rules fixed in advance** — checkpoints are picked by the exam, never "the last one"; a policy
+  becomes the default only if it passes a release gate agreed before the run
+  ([`scripts/release_gate.py`](scripts/release_gate.py)).
+
+## Results against the official policies
+
+Same environment, 256 randomised ducks, 3 seeds; full table and raw JSON in
+[`docs/benchmark.md`](docs/benchmark.md).
+
+**Walk + get-up policies** (one network for walking, getting up and body commands):
+
+| policy | get-up | push recovered, 1.0 / 1.2 m/s | speed for 0.30 m/s | turn for 0.6 / 1.0 rad/s | crouch for −30 mm | 1.5 m goal after a push |
+|---|---|---|---|---|---|---|
+| official `velstand.onnx` (v7) | 96 % | 94 / 93 % | 0.14 m/s | 0.05 / 0.38 | −0.7 mm | 94 % |
+| **`velstand_default.onnx`** (v4) | **99 %** | **95 / 97 %** | 0.18 m/s | 0.39 / 1.10 | **−28.7 mm** | **96 %** |
+| **`velstand_fast.onnx`** (C) | **99 %** | 93 / 93 % | **0.29 m/s** | **0.58 / 1.02** | **−28.7 mm** | 95 % |
+
+**Teachers** (the policies the walk + get-up network learns from):
+
+| | official | ours |
 |---|---|---|
-| Hardware | Linux workstations (COACH2, RTX 5090) | Windows 11 + WSL2 Ubuntu 24.04, RTX 5090 + Intel iGPU (hence the WSLg pitfalls) |
-| Walking policy | `alpha_walking` from wandb `441tzs6d` (3 750 iterations) | `first-walk`, trained here from scratch, 4096 envs × 10 000 iterations — faster and turns in place where the official one does not (table below) |
-| Fall recovery | VelStand distilled from a **private** stand-up expert (`69u48n8l`) | own `StandUp` teacher (13 500 iterations) + VelStand with local checkpoints — v1 got back to standing height after every fall but into a 34° lean; v2 (teacher with command-independent upright rewards) gets up straight, 5/5 falls while walking in the 8-push smoke test |
-| Body-pose control | tilt from the shipped stand expert, crouch "not learned" | teacher rewards made command-relative, crouch taught by the own teacher — v4 crouches 29 mm and tilts ±20° |
-| Tooling | wandb online, internal eval scripts | `WANDB_MODE=offline`, everything reproducible from this repo |
+| walk teacher: speed for 0.15 / 0.30 / 0.45 m/s | 0.00 / 0.15 / 0.21 | **0.16 / 0.31 / 0.44** (v3) |
+| walk teacher: turn for 0.6 / +1.0 / −1.0 rad/s | 0.02 / 0.35 / −0.17 | **0.63 / 1.08 / −1.02** (v3) |
+| stand-up teacher: get-up face-down / face-up / on-side | 100 %, median 0.38 / 0.50 / 0.54 s | 100 %, median **0.28 / 0.44 / 0.50 s** (v3) |
+| stand-up teacher: crouch for −30 mm | +0.5 mm | **−28.2 mm** (v3) |
 
-![64 Microducks in the mjlab StandUp environment, iteration-500 checkpoint](results/standup-500-64envs.jpg)
+In short: the default is level with or ahead of the official policy on every column and crouches,
+which no official policy does; the fast variant walks at the commanded speed and turns on the spot,
+at the cost of a few points of push recovery.
 
-*64 of the 4096 parallel `Mjlab-StandUp-Flat-MicroDuck` environments, replayed with the
-iteration-500 checkpoint in mjlab's native viewer (`uv run play ... --num-envs 64 --viewer native`)
-while the same GPU keeps training. Each duck starts an episode on the ground and has to get up.*
+## What is different from the official setup
 
-## Status (2026-10-18)
-
-✅ = verified in simulation here · 🔄 = training / being tested.
-
-| Milestone | State | Notes |
+| | Official | Here |
 |---|---|---|
-| RTX 5090 (Blackwell, `sm_120`) runs the official `microduck_rl` stack | ✅ verified | `warp-lang 1.12.0` / `mjlab 1.3.0` / `torch 2.9.1+cu128`, WSL2 Ubuntu 24.04 — see [docs/setup-wsl2-rtx5090.md](docs/setup-wsl2-rtx5090.md) |
-| Walking policy (`Mjlab-Velocity-Flat-MicroDuck`) | ✅ trained | 4096 envs × 10 000 iterations, all 41 checkpoints exported to ONNX — see [docs/training-log.md](docs/training-log.md) |
-| Fall recovery (`Mjlab-VelStand-*`) | ✅ trained | The official recipe distils a stand-up expert from a **private** wandb project (HTTP 403), so the teachers were rebuilt here: a `StandUp` teacher (13 500 iterations, with stand-straight and command-relative rewards) and the walk teacher. The current walk + get-up policy is **VelStand v4** (release v0.1): get-up 99 % from face-down / face-up / on-side in a median 0.5 s, straight at the end; 95–97 % of push falls recovered at 1.0–1.2 m/s (official v7: 93–94 %). The way there — the 34° lean of v1, the stand-straight fix, rough terrain + backlash — is in [docs/velstand-without-private-teachers.md](docs/velstand-without-private-teachers.md) and [docs/training-log.md](docs/training-log.md) |
-| Body-pose commands (crouch / tilt while standing) | ✅ trained | Measured first: neither the walk+get-up policy nor the teacher crouched, and tilt tracked only to ~10°. With the teacher's fixed-pose rewards made command-relative ([`patches/body-wide.patch`](patches/body-wide.patch)), teacher v3 crouches and tilts; **VelStand v4** distilled from it crouches −28.6 mm for −30, tracks roll / pitch to within 1° at ±10° and ±20°, and recovers 94–98 % of push falls — see [docs/training-log.md](docs/training-log.md#velstand-v4-body-commands-inside-the-walk--get-up-network-2026-10-11-2300) |
-| Benchmark (256 envs × 3 seeds, any ONNX) | ✅ published | 10 policies — official, own, community — through one exam; v4 level or ahead of the official v7 on every column — see [docs/benchmark.md](docs/benchmark.md) |
-| Release | ✅ v0.2 | `velstand_default.onnx` (= v4) + **`velstand_fast.onnx`** (new: walks at the commanded speed) + walk teacher v3 + stand-up teacher v3 + evaluation JSONs + checksums — [releases/tag/v0.2](https://github.com/xinhuagu/my-microduck-journal/releases/tag/v0.2); earlier: [v0.1](https://github.com/xinhuagu/my-microduck-journal/releases/tag/v0.1) |
-| Navigation layer (walk to a goal) | ✅ measured | 20 lines on top of the policy turn a goal into velocity commands; v4 reaches a goal 1.5 m away 100 % of the time, 96 % after being pushed over on the way (official v7: 97 / 94 %) — see the GIF below and the benchmark's goal columns |
-| Turning (`patches/turn.patch`) | 🔄 partial | A walk teacher trained with slow in-place turns and a yaw-only fine term turns 0.6 rad/s → 0.65 and ±1.0 symmetrically with a third of the yaw drift, and VelStand v5 anchored to it inherits that — at the cost of walking speed (0.30 → 0.12 m/s). The 0.3 rad/s dead zone is unchanged. Next walk teacher has to be fast and turn — see [docs/training-log.md](docs/training-log.md#velstand-v5-the-turning-anchor-measured-2026-10-12-2200) |
-| Walking speed (`patches/speed.patch`) | ✅ fast variant (v0.2) | Every walk policy, official included, walked at ~60 % of the command. A fine forward-speed term in the walk teacher, carried into VelStand by the anchor, gives the speed — and costs push recovery: not more falls, but more ducks left lying on the side / back. Aimed at that, **`velstand_fast.onnx`** (candidate C) walks **0.29 m/s for 0.30**, turns 0.58 for 0.6 rad/s, gets up 99 % like v4, reaches a 1.5 m goal in 6.5 s (v4 9.8 s, official 14.3 s) and recovers 92–95 % of push falls (v4 95–97 %, official 92–96 %). It misses the release gate agreed beforehand by 0.2–3 points, so v4 stays the default — see [docs/findings.md](docs/findings.md) |
-| Fast *and* robust | 🔄 close | First automated search (five one-change runs from the fast variant, ranked by the battery, leaders through the gate): halving the walk-anchor weight and imitating the stand-up teacher ×5 gives the first fast policy that recovers push falls like v4 — **95–96 % in every cell, get-up 99.4 %, 0.30 m/s, pushed goal 97 %** — but it turns 0.51 for 0.6 rad/s and crouches −26.6 mm, just outside the gate (0.55, −27). The anchor weight is the trade knob — see [docs/training-log.md](docs/training-log.md#search-for-fast-and-robust-the-anchor-weight-is-the-trade-knob-2026-10-18-2310) |
+| Walk teacher | trained with the public recipe; walks at about half the commanded speed | retrained, with a narrow speed reward and slow in-place turns ([`speed.patch`](patches/speed.patch), [`turn.patch`](patches/turn.patch)) — tracks the command |
+| Stand-up teacher | needed for the walk + get-up policy, but lives in a **private** project (the official command stops with HTTP 403) | rebuilt here (13 500 iterations), stands up straight ([`standup-stand-straight.patch`](patches/standup-stand-straight.patch)) and follows crouch / tilt commands ([`body-wide.patch`](patches/body-wide.patch)) |
+| Walk + get-up policy | distilled from the private teacher | distilled from the own teachers via local checkpoint paths ([`velstand-local-teachers.patch`](patches/velstand-local-teachers.patch)) |
+| Evaluation | internal scripts | an open, fixed-seed exam for any ONNX ([`scripts/eval_battery.py`](scripts/eval_battery.py)) |
+| Releases | finished ONNX files | ONNX + the exam's raw JSON + checksums, chosen by a gate fixed in advance |
+| Tooling | wandb online | offline; everything reproducible from this repository |
 
-## Fall, get up, walk to the goal, stop
+Every change is behind a `MICRODUCK_*` environment variable and off by default;
+[`patches/all-in-one.patch`](patches/all-in-one.patch) applies all of them at once.
 
-![VelStand v4: pushed over while walking to a goal 1.5 m away, gets up, continues, stops inside 10 cm](results/goal-v4-push-getup-walk-stop.gif)
+## Status
 
-*One duck, policy v4, recorded by the evaluation script: a goal 1.5 m away, a 1.0 m/s push after
-2 s, up again in about a second, on target at 8.4 s, then standing still. The navigation layer is
-20 lines on top of the policy (heading error → turn, distance → speed, inside 10 cm → stop); the
-policy itself only sees velocity commands. Over 256 ducks × 3 seeds, v4 reaches the goal 100 % of
-the time unpushed and 96 % after the push — see the benchmark's goal columns.*
+✅ = done and measured in simulation · 🔄 = in progress
 
-![velstand_fast.onnx (release v0.2): the same exam, faster](results/goal-v02-fast-push-getup-walk-stop.gif)
+| Area | | Where it stands |
+|---|---|---|
+| Upstream stack on an RTX 50-series GPU (WSL2) | ✅ | verified with the versions under "Hardware and timings" — [setup](docs/setup-wsl2-rtx5090.md), [pitfalls](docs/pitfalls.md) |
+| Walk teacher | ✅ | v3 tracks speed and turns |
+| Stand-up teacher | ✅ | v3 gets up in 0.3–0.5 s, crouches, tilts ±20° |
+| Walk + get-up policy | ✅ | v4 = `velstand_default.onnx` |
+| Crouch / tilt while standing | ✅ | −28.7 mm for −30, within 1° at ±10° / ±20° |
+| Walking speed | ✅ | `velstand_fast.onnx`, 0.29 m/s for 0.30 |
+| Turning on the spot | ✅ / 🔄 | 0.6 and 1.0 rad/s tracked; 0.3 rad/s still a dead zone (official too) |
+| Walk to a goal (20-line controller on top) | ✅ | 100 % reached, 95–96 % after being pushed over on the way |
+| Open benchmark | ✅ | 12 policies, official and community included |
+| Fast **and** as robust as the default | 🔄 | close: a fast policy with 95–96 % push recovery exists, it misses the gate on turning and crouch |
+| Release | ✅ | [v0.2](https://github.com/xinhuagu/my-microduck-journal/releases/tag/v0.2) (earlier: [v0.1](https://github.com/xinhuagu/my-microduck-journal/releases/tag/v0.1)) |
 
-*The same exam with `velstand_fast.onnx` (release v0.2): pushed at 1.0 m/s on the way, up again, on target
-at 7.5 s, 7 cm from the goal. Over 256 ducks × 3 seeds it reaches the goal in a median 6.5 s unpushed
-(v4 9.8 s, official 14.3 s), 95 % after the push.*
+## How it was built
 
-## Benchmark
+The route, in the order it was done; each step links to the full record.
 
-[`docs/benchmark.md`](docs/benchmark.md) is one fixed exam for every policy that speaks the
-Microduck contract — 256 randomised ducks, three seeds, forced spawns, pushes and commands — and
-[`scripts/eval_battery.py`](scripts/eval_battery.py) runs it on any `.onnx` in one command. Official,
-own and community policies, same numbers, same code path (headline columns; the full table and the
-raw JSON are in the doc and in `results/benchmark/`):
+1. **Set up** the upstream training stack on WSL2 —
+   [docs/setup-wsl2-rtx5090.md](docs/setup-wsl2-rtx5090.md).
+2. **Walk teacher**, 10 000 iterations with the public recipe; later retrained for turning (v2) and
+   for speed (v3) — [walk v3](docs/training-log.md#walk-teacher-v3-the-speed-patch-closes-the-speed-gap-2026-10-15-2335).
+3. **Stand-up teacher**, rebuilt because the official one is private; the first version got up into
+   a 34° lean, fixed by changing its reward —
+   [docs/velstand-without-private-teachers.md](docs/velstand-without-private-teachers.md).
+4. **Walk + get-up in one network** (VelStand), distilled from both teachers, then trained on rough
+   terrain with actuator backlash — [v2 / v3](docs/training-log.md#velstand-v3--rough-terrain--backlash-2026-10-11-1800).
+5. **Body commands** (crouch / tilt): measured first (nobody crouched), then the teacher's rewards
+   made command-relative — [v4](docs/training-log.md#velstand-v4-body-commands-inside-the-walk--get-up-network-2026-10-11-2300).
+6. **The exam**: a batched, fixed-seed evaluation for any ONNX, run on every official and own policy —
+   [docs/benchmark.md](docs/benchmark.md).
+7. **Speed**: a walk teacher that tracks the command, carried into the walk + get-up network; the
+   push-recovery cost diagnosed and mostly recovered —
+   [docs/findings.md](docs/findings.md).
+8. **Automated rounds**: candidates trained, swept, examined and released by rule, without manual
+   picks — [search](docs/training-log.md#search-for-fast-and-robust-the-anchor-weight-is-the-trade-knob-2026-10-18-2310).
 
-| policy | get-up | push 1.0 / 1.2 m/s recovered | speed at 0.30 | turn 0.6 / 1.0 rad/s | crouch −30 mm | pitch ±10° | 1.5 m goal, pushed |
-|---|---|---|---|---|---|---|---|
-| official `velstand.onnx` (v7) | 96 % | 94 / 93 % | 0.14 m/s | 0.05 / 0.38 | −0.7 mm | 8.0° | 94 % |
-| **ours v4** (release v0.1) | **99 %** | **95 / 97 %** | **0.18 m/s** | 0.39 / 1.10 | **−28.7 mm** | **10.0°** | **96 %** |
-| **ours fast** (release v0.2) | **99 %** | 93 / 93 % | **0.29 m/s** | **0.58 / 1.02** | **−28.7 mm** | **10.0°** | 95 % |
-| ours v6 (speed variant) | 97 % | 89 / 88 % | **0.30 m/s** | **0.60 / 1.08** | −24.2 mm | 9.7° | 92 % |
-| ours v5 (turning variant) | 95 % | 89 / 89 % | 0.12 m/s | **0.68 / 1.12** | −25.8 mm | 9.8° | 90 % |
-| ours v2 | 97 % | 85 / 86 % | 0.18 m/s | 0.38 / 0.92 | −0.5 mm | 3.1° | 89 % |
+![64 Microducks in the StandUp environment](results/standup-500-64envs.jpg)
+
+*64 of the 4096 parallel stand-up environments, replayed with an early checkpoint while the same
+GPU keeps training. Each duck starts on the ground and has to get up.*
+
+## What we learned
+
+The full write-up is [docs/findings.md](docs/findings.md); the short version:
+
+- **A policy that under-tracks a command is usually doing what the reward prices.** Every walk policy
+  walked at ~60 % of the command because the stock speed reward is too wide to notice a 0.1 m/s
+  shortfall. A narrow term next to it fixed it.
+- **In the walk + get-up network, the walk teacher decides the gait.** Change the teacher and the
+  combined policy follows it almost exactly — so a teacher has to be measured before it is used.
+- **The fast gait does not make the duck fall more; it makes it get up less.** The ducks that stay
+  down lie on the side or back. Found by recording *where* failures end up, not just how many.
+- **The walk-teacher weight trades push recovery against turning.** Halving it gives push recovery
+  like the default at full speed, but weaker turning.
+
+## Get the policies
+
+From the [Releases page](https://github.com/xinhuagu/my-microduck-journal/releases) (checkpoints
+are not in this repository):
+
+| file (v0.2) | what it is |
+|---|---|
+| `velstand_default.onnx` | **the policy to use**: walks, gets up from any fall, crouch / tilt while standing |
+| `velstand_fast.onnx` | the same skills, walks at the commanded speed, recovers a few points fewer push falls |
+| `walk_teacher_v3.onnx`, `standup_teacher_v3.onnx` | the two teachers, to distil or compare against |
+| `eval_*.json`, `SHA256SUMS.txt` | the exam's raw output for the policies above, and checksums |
+
+```bash
+# inside upstream microduck_rl (see "Reproduce it")
+uv run scripts/infer_policy.py --walking velstand_default.onnx --new-cmd-obs
+```
+
+Run the exam on any policy, yours included:
 
 ```bash
 bash scripts/eval_battery.sh Mjlab-VelStand-Flat-MicroDuck my_policy.onnx 256 getup,push,tracking,body out.json 0,1,2 my_policy
 ```
 
-## Measured against the official policies
-
-The official ONNX policies (Hugging Face `pollen-robotics/microduck-policies`) run through the same
-batched battery as ours: identical environment, 256 randomised ducks, seed 0, 8 s per command.
-Walking policies first (`Mjlab-Velocity-Flat-MicroDuck` environment):
-
-| command | official `alpha_walking` | ours `first_walk_10000` |
-|---|---|---|
-| walk 0.15 / 0.30 / 0.45 m/s → achieved | 0.00 / 0.15 / 0.21 m/s | **0.10 / 0.20 / 0.27 m/s** |
-| turn in place 0.3 / 0.6 / 1.0 / −1.0 rad/s → achieved | 0.00 / 0.02 / 0.35 / −0.17 | 0.05 / **0.57 / 1.00 / −1.00** |
-| falls during the trial | 0 % | 0 % |
-
-- Same recipe, more training: the walk recipe is unchanged here; ours ran 10 000 iterations against
-  the official checkpoint's 3 750. The official policy does not step at all for a 0.15 m/s command
-  and has the in-place turning dead zone its own notes describe; ours tracks 0.6 rad/s and above,
-  symmetrically. Both under-track speed (0.30 → 0.20 / 0.15) and both ignore 0.3 rad/s.
-- Caveat: the official checkpoint comes from an older commit of the recipe, so the environment's
-  randomisation may differ slightly from what it was trained in.
-
-Walk + get-up policies (`Mjlab-VelStand-Flat-MicroDuck` environment; the official file is their
-deployed v7, ours is v2 `model_5750`):
-
-| | official `velstand.onnx` (v7) | ours v2 | **ours v4** |
-|---|---|---|---|
-| get-up from face-down / face-up / on-side | 100 / 93 / 95 % | 99 / 93 / 93 % | **100 / 98 / 99 %** |
-| recovered after a 1.0 / 1.2 m/s push, standing | 92 / 92 % | 87 / 76 % | **94 / 98 %** |
-| recovered after a 1.0 / 1.2 m/s push, walking | 94 / 93 % | 84 / 86 % | **94 / 97 %** |
-| walk 0.15 / 0.30 / 0.45 m/s → achieved | 0.02 / 0.14 / 0.22 m/s | 0.09 / 0.18 / 0.25 | 0.06 / **0.18 / 0.24** |
-| turn in place 0.3 / 0.6 / 1.0 / −1.0 rad/s → achieved | 0.00 / 0.05 / 0.39 / −0.34 | 0.02 / 0.46 / 0.91 / −1.00 | 0.00 / **0.40 / 1.09 / −0.91** |
-| body tilt ±10° → achieved | +9.9 / −6.2° pitch, ±7.8° roll | +3.7 / −2.5°, ±1.6° | **+10.2 / −9.6° pitch, ±9.6° roll** |
-| body tilt ±20° → achieved | +16.9 / −15.4° | +4.2 / −2.0° | **+20.4 / −19.0°** |
-| crouch −30 mm → achieved | −0.6 mm | −0.4 mm | **−28.6 mm** |
-
-Stand-up teachers (`Mjlab-StandUp-Flat-MicroDuck` environment; these are the policies the walk +
-get-up networks are distilled from):
-
-| | official `alpha_stand` | ours teacher v3 |
-|---|---|---|
-| get-up from face-down / face-up / on-side | 100 / 100 / 100 %, median 0.38 / 0.50 / 0.54 s | 100 / 100 / 100 %, median **0.28 / 0.44 / 0.50 s** |
-| body tilt ±10° / ±20° → achieved | ±9.2° roll, +9.5 / −9.1°, +18.4 / −18.6° pitch | ±9.5° roll, +10.0 / −8.9°, +19.7 / −19.4° pitch |
-| crouch −30 mm / raise +20 mm → achieved | +0.5 / +1.8 mm (none) | **−28.2 / +12.4 mm** |
-
-So, measured the same way: v4 is level with or ahead of the official policy on every row — get-up,
-push recovery, speed, turning, tilt — and crouches, which no official policy does. (v5, the same
-network re-anchored to a walk teacher trained for turning, turns more consistently — 0.6 rad/s →
-0.68 for every duck, drift a third of v4's — but walks slower, 0.12 m/s, and recovers fewer push
-falls; v4 remains the policy to use.) Still open on
-both sides: the 0.3 rad/s turning dead zone and the gap between commanded and achieved walking speed
-(both track 0.30 m/s at about 0.18 / 0.14). Full tables with per-env spread:
-[docs/training-log.md](docs/training-log.md#official-policies-measured-with-the-same-battery-2026-10-11-2130),
-v4 details in [its section](docs/training-log.md#velstand-v4-body-commands-inside-the-walk--get-up-network-2026-10-11-2300).
-
-## Hardware & software
-
-| | |
-|---|---|
-| GPU | NVIDIA GeForce RTX 5090, 32 GB, driver 617.42 (Windows) |
-| CPU / RAM | 64 GB RAM, Windows 11 (build 26200) |
-| WSL | WSL 2.7.13, kernel 6.18.33.2, WSLg 1.0.73, Ubuntu 24.04 LTS |
-| Python stack | uv 0.12.10, Python 3.12.3, torch 2.9.1+cu128, warp-lang 1.12.0, mjlab 1.3.0, mujoco 3.10.0 |
-| `microduck_rl` | `develop` @ `ceca0170` (2026-10-09); first runs were on `29e887e` (2026-09-02) |
-
-## Headline numbers
-
-- **Smoke test** (5 iterations × 64 envs): 42 s wall-clock, Warp reports `"cuda:0": "NVIDIA GeForce RTX 5090" (32 GiB, sm_120)`, CUDA Toolkit 12.9. No `no kernel image` errors.
-- **Full walk training** (4096 envs): iteration 0 → 1000 in 30 min, 0 → 2500 in 69 min, i.e. roughly **2.5–3 h for the 6000-iteration budget** the upstream docs recommend for gaits. (Upstream README says "about 1–2 h"; a 4090 under WSL2 was reported at ~4 h 23 min.)
-- **Export**: ~13 s per checkpoint (`scripts/export.py`, normalizer baked in), ONNX ≈ 775 KB each.
-- **Stand-up teacher**: 6 000 iterations in 2 h 30 min, plus 7 500 stand-straight iterations in 3 h 02 min (1.30 s collection + 0.07 s learning per iteration); **VelStand** (walk + get-up): v1 3 000 iterations in 1 h 35 min, 1.70 s/iteration including the behaviour-cloning passes; v2 6 000 iterations in ≈ 3 h 20 min.
-
-## Repository layout
-
-```
-docs/
-  setup-wsl2-rtx5090.md             environment, install, smoke test
-  pitfalls.md                       every problem hit so far, with the fix
-  training-log.md                   one row per run: task, envs, iterations, time, outcome
-  velstand-without-private-teachers.md   how to train fall recovery without the private wandb teachers
-  benchmark.md                      the policy benchmark: method, how to run it, results
-  findings.md                       what the speed rounds showed: reward width, the anchor decides the gait,
-                                    why the fast anchor costs push recovery and how that was found
-scripts/
-  export_all.sh                     export every checkpoint of a run to ONNX
-  run_viewer.sh / tmux_viewer.sh    CPU MuJoCo viewer with the right env vars (tmux variant takes injected keys)
-  train_standup_teacher.sh          teacher v1 (6 000 iterations from scratch)
-  train_standup_teacher_v2_straight.sh   teacher v2 fine-tune (stand-straight rewards)
-  train_velstand_v1.sh              VelStand v1 (warm start from the walk, local teachers)
-  pipeline_round1_*.sh              teacher v2 → continue → VelStand v2 → v3, with probes and push tests
-  pipeline_round1b_resume_after_sleep.sh   the resume after the PC went to sleep mid-run
-  pipeline_round2_body_pose.sh      teacher v3 (body-pose) → VelStand v4
-  pipeline_round3_turning.sh        walk teacher v2 (yaw fixes) → sweeps → VelStand v5
-  pipeline_round4_speed.sh          walk teacher v3 (speed + mild turn) → battery gate → VelStand v6 → battery
-  pipeline_round5_*.sh / round6*.sh  v0.2 candidates A, B, C → sweep → 3-seed battery → release gate
-  pipeline_round7_release_prep_and_search.sh   release by rule (release_plan.py) → GIF, notes, checksums;
-                                    then the fast-and-robust search (search_board.py)
-  release_gate.py / pick_from_battery.py   the release gate, and checkpoint picks from battery sweeps
-  pushtest.sh                       8 random pushes in the viewer: moved / went down / upright at the end
-  posture_probe.sh                  trunk height, pitch, roll and joint angles before and after pushes
-  bodypose_probe.sh                 commanded vs measured crouch / tilt
-  turn_probe.sh / turn_sweep.sh     in-place yaw rate and straight-walk drift, per checkpoint
-  eval_battery.py / .sh             batched, fixed-seed battery: get-up per spawn type, push falls, tracking, body commands
-  benchmark_all.sh / benchmark_table.py   run every policy through the battery (3 seeds) and build the table
-  wslg_copymode.ps1                 check / fix the WSLg copy-mode blank window without wsl --shutdown
-patches/                            config diffs against upstream microduck_rl:
-  all-in-one.patch                  every change below plus the later knobs, in one diff (git apply)
-  velstand-local-teachers.patch     MICRODUCK_STAND_EXPERT / MICRODUCK_WALK_ANCHOR = local checkpoint paths
-  standup-stand-straight.patch      MICRODUCK_STANDUP_STRAIGHT=1 (teacher v2)
-  body-wide.patch                   MICRODUCK_BODY_WIDE=1 (teacher v3 / VelStand v4)
-  turn.patch                        MICRODUCK_TURN=1 (walk teacher v2 / VelStand v5)
-  speed.patch                       MICRODUCK_SPEED=1 (walk teacher v3 / VelStand v6 / fast variant)
-results/                            screenshots used in this README and the docs
-```
-
-Checkpoints (`.pt`) are not in this repo. The exported policies are on the
-[Releases page](https://github.com/xinhuagu/my-microduck-journal/releases): **v0.2** has `velstand_default.onnx`
-(= v4, the policy to use), `velstand_fast.onnx` (walks at the commanded speed), walk teacher v3, stand-up
-teacher v3, the evaluation JSONs and sha256 sums; **v0.1** has `velstand_v4.onnx`
-(the policy to use), the v5 turning variant, both teachers, the evaluation JSONs and sha256 sums,
-with the training provenance and the comparison table in the notes.
-
-## Quick start (what actually worked here)
+## Reproduce it
 
 ```bash
 # WSL2 Ubuntu 24.04, NVIDIA driver >= 580 on the Windows side
 curl -LsSf https://astral.sh/uv/install.sh | sh
 git clone https://github.com/pollen-robotics/microduck_rl && cd microduck_rl
-git checkout ceca0170                             # the upstream commit every run below used
-git apply /path/to/my-microduck-journal/patches/velstand-local-teachers.patch
-git apply /path/to/my-microduck-journal/patches/standup-stand-straight.patch
-git apply /path/to/my-microduck-journal/patches/body-wide.patch   # only needed for the body-pose round
-git apply /path/to/my-microduck-journal/patches/turn.patch        # only needed for the turning round
-UV_HTTP_TIMEOUT=600 uv sync --locked              # ~2 GB of CUDA wheels on first run
+git checkout ceca0170                                  # the upstream commit every run here used
+git apply /path/to/my-microduck-journal/patches/all-in-one.patch
+UV_HTTP_TIMEOUT=600 uv sync --locked                   # ~2 GB of CUDA wheels on first run
 
-# smoke test (always first), then the real thing
+# smoke test first, then a real run
 WANDB_MODE=offline uv run train Mjlab-Velocity-Flat-MicroDuck --env.scene.num-envs 64 --agent.max-iterations 5
 WANDB_MODE=offline uv run train Mjlab-Velocity-Flat-MicroDuck --env.scene.num-envs 4096
-
-# export + drive it in the CPU viewer (see docs/pitfalls.md for the WSLg env vars)
-uv run scripts/export.py Mjlab-Velocity-Flat-MicroDuck --checkpoint-file logs/rsl_rl/velocity/<run>/model_10000.pt --onnx-file walk.onnx
-MESA_D3D12_DEFAULT_ADAPTER_NAME=NVIDIA GALLIUM_DRIVER=d3d12 uv run scripts/infer_policy.py --walking walk.onnx --new-cmd-obs
 ```
 
-The full order of runs, each with the exact command, is in [docs/training-log.md](docs/training-log.md)
-and the scripts above: walk (10 000 iterations) → `train_standup_teacher.sh` (6 000) →
-`train_standup_teacher_v2_straight.sh` (1 500, then `pipeline_round1_*.sh` continues it by 6 000 and
-trains VelStand v2 / v3) → `pipeline_round2_body_pose.sh`. Every pipeline step runs `pushtest.sh`
-and `posture_probe.sh` on the result and appends to `logs/pipeline*.log`. Run names and checkpoint
-numbers inside the scripts are the ones from this machine; change them to yours.
+Each later step is one script in [`scripts/`](scripts/) (`train_*.sh`, then `pipeline_round*.sh` in
+order); the exact command, settings and checkpoint picked for every run are in
+[docs/training-log.md](docs/training-log.md). Run names inside the scripts are the ones from this
+machine — change them to yours. Viewer settings for WSLg are in [docs/pitfalls.md](docs/pitfalls.md).
+
+## Repository layout
+
+```
+docs/
+  findings.md                        what the speed rounds showed, and how it was found
+  benchmark.md                       the exam: method, how to run it, all results
+  training-log.md                    every run: command, settings, time, outcome, checkpoint picked
+  velstand-without-private-teachers.md   training walk + get-up without the private teacher
+  setup-wsl2-rtx5090.md / pitfalls.md    environment, and every problem hit with its fix
+patches/
+  all-in-one.patch                   every change in one diff; the per-topic patches next to it
+scripts/
+  train_*.sh, pipeline_round*.sh     the exact training runs, in order (round 7 = release + search)
+  eval_battery.py / .sh              the exam; benchmark_all.sh / benchmark_table.py build the table
+  pick_from_battery.py, release_gate.py, release_plan.py, search_board.py
+                                     checkpoint picks, the release gate, release by rule, leaderboard
+  pushtest.sh, posture_probe.sh, bodypose_probe.sh, turn_probe.sh   quick probes (pushes, posture, body commands, turning)
+results/
+  benchmark/                         raw JSON of every exam
+  *.gif, *.jpg                       the images in this README
+```
+
+## Hardware and timings
+
+| | |
+|---|---|
+| GPU | NVIDIA GeForce RTX 5090, 32 GB (Windows driver 617.42) |
+| System | Windows 11, 64 GB RAM, WSL 2.7.13, Ubuntu 24.04 |
+| Software | uv 0.12.10, Python 3.12.3, torch 2.9.1+cu128, warp-lang 1.12.0, mjlab 1.3.0, mujoco 3.10.0 |
+| Upstream | `microduck_rl` `develop` @ `ceca0170` |
+
+| job (4096 parallel environments) | time |
+|---|---|
+| walk teacher, 6 000 iterations | 2.5–3 h |
+| stand-up teacher, 6 000 + 7 500 iterations | 2 h 30 min + 3 h 02 min |
+| walk + get-up policy, 3 000 iterations | about 3 h |
+| the full exam, one policy, 3 seeds | about 16 min |
+
+A 16 GB card runs the same recipe with half the parallel environments and proportionally more time.
 
 ## Upstream
 
-- Robot software: [pollen-robotics/microduck](https://github.com/pollen-robotics/microduck)
-- RL environments: [pollen-robotics/microduck_rl](https://github.com/pollen-robotics/microduck_rl) (Apache-2.0; its `AGENTS.md` is the real training manual)
-- Simulator / framework: [mujocolab/mjlab](https://github.com/mujocolab/mjlab), [google-deepmind/mujoco_warp](https://github.com/google-deepmind/mujoco_warp)
-- Official policies: [pollen-robotics/microduck-policies](https://huggingface.co/pollen-robotics/microduck-policies) (ONNX only)
+- Robot software: [microduck](https://github.com/pollen-robotics/microduck)
+- RL environments: [microduck_rl](https://github.com/pollen-robotics/microduck_rl) (Apache-2.0; its `AGENTS.md` is the real training manual)
+- Simulator: [mjlab](https://github.com/mujocolab/mjlab), [mujoco_warp](https://github.com/google-deepmind/mujoco_warp)
+- Official policies: [microduck-policies](https://huggingface.co/pollen-robotics/microduck-policies) (ONNX only)
 
 ## License
 
