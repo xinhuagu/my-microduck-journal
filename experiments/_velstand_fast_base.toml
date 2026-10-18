@@ -1,0 +1,26 @@
+# Shared settings for the fast walk + get-up experiments (C, S0-S5). Included by the specs next to it.
+# Paths are relative to microduck_rl; the run directories are the ones on the machine that ran them
+# (see docs/training-log.md) - change them to yours.
+
+task = "Mjlab-VelStand-Rough-Backlash-MicroDuck"     # trained on rough terrain with actuator backlash
+eval_task = "Mjlab-VelStand-Flat-MicroDuck"          # examined on flat ground, like every policy in the benchmark
+num_envs = 4096
+
+[env]
+MICRODUCK_TURN = "1"            # turn.patch
+MICRODUCK_SPEED = "1"           # speed.patch
+MICRODUCK_BODY_WIDE = "1"       # body-wide.patch: crouch / tilt commands
+MICRODUCK_SPEED_FINE_W = "0"    # no speed term inside VelStand: the walk teacher carries the speed
+MICRODUCK_GROUND_MIX = "1"      # more episodes start lying on the side / back
+MICRODUCK_STAND_EXPERT = "logs/rsl_rl/microduck_stand/2026-10-11_17-53-45_microduck_stand/model_2999.pt"   # stand-up teacher v3
+MICRODUCK_WALK_ANCHOR = "logs/rsl_rl/velocity/2026-10-15_22-09-39_velocity/model_2000.pt"                # walk teacher v3
+
+[sweep]
+from = 2500          # examine every saved checkpoint from here on
+trials = "tracking,push"
+seeds = "0"
+pick = "release"     # pick_from_battery.py: push recovery first, speed and turning capped at the gate's bar
+
+[exam]
+trials = "getup,push,tracking,body,goal"
+seeds = "0,1,2"

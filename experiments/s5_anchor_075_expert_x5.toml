@@ -1,0 +1,16 @@
+# S5 (2026-10-19): between S3 (anchor x0.5, recovers pushes, turns 0.51) and S2 (anchor x1.0, turns, recovers less).
+# Result: turn 0.56, crouch -27.6 mm, push 93.1-95.5 % -> gate FAIL on three push cells (docs/training-log.md).
+include = ["_velstand_fast_base.toml"]
+name = "S5_anchor_075_expert_x5"
+iterations = 1000
+
+[start]
+mode = "resume"     # plain resume: curricula continue, a new run directory holds the new checkpoints
+from = "logs/rsl_rl/velstand/2026-10-18_12-34-58_velstand/model_2250.pt"   # candidate C = velstand_fast.onnx (v0.2)
+
+[env]
+MICRODUCK_EXPERT_BC_COEF = "5.0"   # imitate the stand-up teacher x5 on fallen frames
+MICRODUCK_ANCHOR_COEF = "0.75"     # walk-teacher imitation at 3/4 weight
+
+[gate]
+compare = ["logs/eval/search_S3_anchor_half_expert_x5.json", "logs/eval/search_S2_expert_x5.json"]

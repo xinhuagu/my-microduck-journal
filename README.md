@@ -45,6 +45,10 @@ so that anyone with one consumer GPU can reproduce it, check it, or continue fro
 - **Rules fixed in advance** — checkpoints are picked by the exam, never "the last one"; a policy
   becomes the default only if it passes a release gate agreed before the run
   ([`scripts/release_gate.py`](scripts/release_gate.py)).
+- **A reusable loop** — an experiment is a small TOML file; one command trains, examines every
+  checkpoint, picks, examines the pick with 3 seeds, exports and gates it
+  ([`scripts/lab.py`](scripts/lab.py)). How to use it for another skill, and why each rule exists:
+  [`docs/method.md`](docs/method.md).
 
 ## Results against the official policies
 
@@ -133,7 +137,8 @@ The route, in the order it was done; each step links to the full record.
    push-recovery cost diagnosed and mostly recovered —
    [docs/findings.md](docs/findings.md).
 8. **Automated rounds**: candidates trained, swept, examined and released by rule, without manual
-   picks — [search](docs/training-log.md#search-for-fast-and-robust-the-anchor-weight-is-the-trade-knob-2026-10-18-2310).
+   picks — [search](docs/training-log.md#search-for-fast-and-robust-the-anchor-weight-is-the-trade-knob-2026-10-18-2310);
+   now one tool, [`scripts/lab.py`](scripts/lab.py), described in [docs/method.md](docs/method.md).
 
 ![64 Microducks in the StandUp environment](results/standup-500-64envs.jpg)
 
@@ -197,22 +202,33 @@ order); the exact command, settings and checkpoint picked for every run are in
 [docs/training-log.md](docs/training-log.md). Run names inside the scripts are the ones from this
 machine — change them to yours. Viewer settings for WSLg are in [docs/pitfalls.md](docs/pitfalls.md).
 
+New experiments are TOML files run by the loop ([`experiments/README.md`](experiments/README.md)):
+
+```bash
+python3 scripts/lab.py run --smoke experiments/s5_anchor_075_expert_x5.toml   # 3 iterations: checks the plumbing
+python3 scripts/lab.py run experiments/s5_anchor_075_expert_x5.toml           # train → sweep → pick → exam → export → gate
+python3 scripts/lab.py board                                                   # leaderboard of finished experiments
+```
+
 ## Repository layout
 
 ```
 docs/
+  method.md                          the experiment loop: how to use it for a new skill, why each rule exists
   findings.md                        what the speed rounds showed, and how it was found
   benchmark.md                       the exam: method, how to run it, all results
   training-log.md                    every run: command, settings, time, outcome, checkpoint picked
   velstand-without-private-teachers.md   training walk + get-up without the private teacher
   setup-wsl2-rtx5090.md / pitfalls.md    environment, and every problem hit with its fix
+experiments/                         one TOML file per experiment, run by scripts/lab.py
 patches/
   all-in-one.patch                   every change in one diff; the per-topic patches next to it
 scripts/
-  train_*.sh, pipeline_round*.sh     the exact training runs, in order (round 7 = release + search)
+  lab.py                             the loop: train → sweep → pick → exam → export → gate → ledger
+  train_*.sh, pipeline_round*.sh     the exact training runs so far, in order (round 7 = release + search)
   eval_battery.py / .sh              the exam; benchmark_all.sh / benchmark_table.py build the table
-  pick_from_battery.py, release_gate.py, release_plan.py, search_board.py
-                                     checkpoint picks, the release gate, release by rule, leaderboard
+  pick_from_battery.py, release_gate.py, release_plan.py, search_board.py, plot_tradeoff.py
+                                     checkpoint picks, the release gate, release by rule, leaderboard, chart
   pushtest.sh, posture_probe.sh, bodypose_probe.sh, turn_probe.sh   quick probes (pushes, posture, body commands, turning)
 results/
   benchmark/                         raw JSON of every exam
