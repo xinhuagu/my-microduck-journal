@@ -524,6 +524,52 @@ of the range) plus an additive fine linear-velocity term and more high-speed com
 both numbers before any distillation; the 0.3 rad/s dead zone goes to the runtime command remap
 unless that teacher opens it.
 
+## Search for fast *and* robust: the anchor weight is the trade knob (2026-10-18 23:10)
+
+Automated round after release v0.2 ([`scripts/pipeline_round7_release_prep_and_search.sh`](../scripts/pipeline_round7_release_prep_and_search.sh)
+and [`pipeline_round7b_promote.sh`](../scripts/pipeline_round7b_promote.sh)): five resumes of C `model_2250`, 1 000
+iterations each, one change each, everything else as C. Screening = battery (tracking + push + get-up, 1 seed)
+on each run's last checkpoint ([`scripts/search_board.py`](../scripts/search_board.py)); raw JSON in
+`results/benchmark/search_v03/`.
+
+| variant (change from C) | push recovered, min / mean of 4 cells | get-up | speed at 0.30 | turn at 0.6 |
+|---|---|---|---|---|
+| S0 control (none) | 82.7 / 86.9 % | 94.8 % | 0.29 | 0.62 |
+| S1 walk-anchor weight ×0.5 (`MICRODUCK_ANCHOR_COEF=0.5`) | 89.7 / 92.6 % | 99.2 % | 0.28 | 0.51 |
+| S2 stand-up imitation ×5 (`MICRODUCK_EXPERT_BC_COEF=5.0`) | 92.7 / 94.6 % | 99.1 % | 0.31 | 0.57 |
+| **S3 = S1 + S2** | **93.1 / 94.4 %** | **99.6 %** | 0.28 | 0.58 |
+| S4 in-network speed term at half weight | 92.4 / 93.4 % | 98.4 % | 0.29 | 0.57 |
+
+The control matters most: with C's settings unchanged, 1 000 more iterations erode recovery and get-up
+again (C's `2250` was a good moment, not a stable point). Both levers on the get-up side help by 6–8
+points over the control.
+
+The two leaders were promoted (battery sweep over every checkpoint 2500–3249, pick by release score,
+3-seed battery, release gate):
+
+| | v4 (default) | C (`velstand_fast`, v0.2) | **S3 `2500`** | **S2 `3000`** | gate |
+|---|---|---|---|---|---|
+| push recovered, standing 1.0 / 1.2 m/s | 95.3 / 96.7 % | 93.3 / 91.9 % | **96.1 / 95.0 %** | 94.3 / 92.5 % | ≥ 95 % |
+| push recovered, walking 1.0 / 1.2 m/s | 94.9 / 96.6 % | 93.4 / 94.8 % | **95.2 / 95.7 %** | 95.0 / 93.9 % | ≥ 95 % |
+| get-up face-down / face-up / on-side | 99.7 / 97.5 / 98.7 % | 100 / 97.7 / 98.7 % | **100 / 98.8 / 99.5 %** | 99.6 / 97.9 / 99.1 % | ≥ 98 % overall |
+| speed at 0.30 / 0.45 m/s | 0.18 / 0.23 | 0.29 / 0.40 | 0.30 / 0.42 | 0.30 / 0.42 | ≥ 0.28 |
+| turn at 0.6 / ±1.0 rad/s; drift p90 | 0.39 / 1.10, −0.90; 0.18 | 0.58 / 1.02, −1.00; 0.09 | 0.51 / 1.00, −0.97; **0.07** | 0.75 / 1.21, −0.88; 0.12 | ≥ 0.55 |
+| crouch for −30 mm | −28.7 | −28.7 | −26.6 | −28.5 | ≤ −27 |
+| 1.5 m goal: unpushed median; after a push | 9.8 s; 96 % | 6.5 s; 95 % | **6.3 s; 97 %** | 6.5 s; 97 % | ≥ 96 % |
+| release gate | — | FAIL (push) | FAIL (turn, crouch) | FAIL (push) | |
+
+Reading:
+
+- **S3 is the first fast policy that recovers push falls like v4**: every push cell ≥ 95 %, get-up 99.4 %,
+  the pushed goal 97 % — at 0.30 m/s and with the lowest drift measured. It misses the gate on turning
+  (0.51 vs 0.55) and crouch (−26.6 vs −27 mm).
+- **S2 fails the other way**: turning and crouch are fine (even over-turning, 0.75 for 0.6) but push
+  recovery stays at 92.5–95 %.
+- The difference between them is one knob: the walk-anchor weight. Halving it buys push recovery and
+  costs turning — what the anchor teaches (S1, anchor ×0.5 alone, also drops to 0.51). Why the crouch
+  gets 2 mm shallower is not clear yet. Next: the same as S3 with the anchor at 0.75 instead of 0.5,
+  judged by the same gate.
+
 ## Candidate C and release v0.2 (2026-10-18 14:40)
 
 A's configuration (v4 warm-started, anchor = walk teacher v3, `MICRODUCK_SPEED_FINE_W=0`) plus the two
@@ -916,5 +962,5 @@ sweep → push tests and all three probes on the pick. Checkpoints are now chose
 11. Body-pose commands while walking (lift the standing gate).
 12. Fillers for idle GPU time: ablation of the stand-straight fix; episodic tricks — forward roll
     started 2026-10-15 (paused at iteration 301), one-leg stand, bow.
-13. Fast *and* robust (running since 2026-10-18 14:42): five one-change resumes from C, ranked by the
-    battery, best one through the release gate (`pipeline_round7_release_prep_and_search.sh`).
+13. Fast *and* robust: first search done (2026-10-18 23:10) — S3 (anchor ×0.5 + stand-up imitation ×5)
+    passes every push cell but misses turning and crouch; next: anchor ×0.75 + imitation ×5.
