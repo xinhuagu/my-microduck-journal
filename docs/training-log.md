@@ -524,6 +524,51 @@ of the range) plus an additive fine linear-velocity term and more high-speed com
 both numbers before any distillation; the 0.3 rad/s dead zone goes to the runtime command remap
 unless that teacher opens it.
 
+## Candidate C and release v0.2 (2026-10-18 14:40)
+
+A's configuration (v4 warm-started, anchor = walk teacher v3, `MICRODUCK_SPEED_FINE_W=0`) plus the two
+changes the diagnosis below pointed at: stand-up imitation on fallen frames ×3
+(`MICRODUCK_EXPERT_BC_COEF=3.0`) and more episodes that start lying on the side / back
+(`MICRODUCK_GROUND_MIX=1`: final ground-spawn shares prone 0.55, side 0.6, face-down 0.30 of the rest).
+3 000 iterations on `Mjlab-VelStand-Rough-Backlash-MicroDuck`, stopped overnight at 2 089 and resumed
+from `model_2000` (plain resume, new run dir). Battery sweep over 2000–2999 (tracking + push, 1 seed):
+
+| checkpoint | speed at 0.30 | turn 0.6 | push recovered 1.0 / 1.2 m/s |
+|---|---|---|---|
+| 2000 | 0.29 | 0.64 | 0.93 / 0.88 |
+| **2250** (pick) | 0.29 | 0.58 | 0.94 / 0.90 |
+| 2500 | 0.29 | 0.64 | 0.95 / 0.87 |
+| 2750 | 0.28 | 0.59 | 0.93 / 0.91 |
+| 2999 | 0.30 | 0.49 | 0.93 / 0.91 |
+
+Full battery on `model_2250`, 3 seeds (raw JSON in `results/benchmark/v02_candidates/`):
+
+| | v4 (release v0.1) | A | **C `2250`** |
+|---|---|---|---|
+| get-up face-down / face-up / on-side | 99.7 / 97.5 / 98.7 % | 99.7 / 93.9 / 96.9 % | **100 / 97.7 / 98.7 %** |
+| push recovered, standing 1.0 / 1.2 m/s | 95.3 / 96.7 % | 89.2 / 82.9 % | 93.3 / 91.9 % |
+| push recovered, walking 1.0 / 1.2 m/s | 94.9 / 96.6 % | 87.2 / 88.1 % | 93.4 / 94.8 % |
+| non-recovered ducks lying (share of failures) | 83–90 % | 94–100 % | 82–95 % |
+| speed at 0.30 / 0.45 m/s | 0.18 / 0.23 | 0.28 / 0.39 | 0.29 / 0.40 |
+| turn at 0.6 / ±1.0 rad/s; drift p90 | 0.39 / 1.10, −0.90; 0.18 | 0.55 / 1.00, −0.99; 0.10 | 0.58 / 1.02, −1.00; **0.09** |
+| crouch for −30 mm | −28.7 | −27.8 | **−28.7** |
+| 1.5 m goal: unpushed median; after a push reached | 9.8 s; 96 % | 6.6 s; 93 % | **6.5 s**; 95 % |
+
+Reading: the targeted change fixed what it targeted — the get-up from the ground is back to v4's level
+and the crouch with it — and push recovery came most of the way back (83–89 → 92–95 %). The ducks
+still lost after a push are again mostly lying, so a get-up after a push differs from one from a spawn
+in something the extra ground starts do not cover. Release gate: **FAIL** on four push cells by
+0.2–3.1 points and on the pushed goal (94.7 vs 96 %).
+
+**Release v0.2**, by the rule fixed before the run (`scripts/release_plan.py`): the default stays v4
+(`velstand_default.onnx`, byte-identical to v0.1's `velstand_v4.onnx`), and C is published as
+`velstand_fast.onnx`, with walk teacher v3, stand-up teacher v3, the battery JSONs, the GIF and
+checksums. Packed automatically by `scripts/pipeline_round7_release_prep_and_search.sh`, which then
+starts the next round: five 1 000-iteration resumes from C, one change each — S0 control, S1 anchor
+weight ×0.5 (`MICRODUCK_ANCHOR_COEF=0.5`), S2 stand-up imitation ×5, S3 both, S4 in-network speed term
+at half weight — ranked by `scripts/search_board.py`; the best one, if its single-seed preview passes,
+gets the 3-seed battery and the gate. Write-up of the whole speed story: [findings.md](findings.md).
+
 ## Diagnosis: what the fast anchor actually breaks (2026-10-17 22:30)
 
 Two cheap battery runs before choosing the next 4-hour experiment (raw JSON in
@@ -866,7 +911,10 @@ sweep → push tests and all three probes on the pick. Checkpoints are now chose
 7. ~~Fixed-seed, batched evaluation battery~~ Done and published as the benchmark (docs/benchmark.md: 10 policies × 3 seeds, ONNX input, dynamic batching); impact forces still to add.
 8. ~~The official policies measured with the same battery.~~ Done: walk, walk+get-up and stand-up teachers, all in the README.
 9. ~~GitHub Release per round: ONNX files + config + sha256.~~ v0.1 published (2026-10-12 22:15): v4, v5 variant, teachers, eval JSONs, SHA256SUMS.
-10. Speed round (pipeline 5, running since 2026-10-15 22:09): walk teacher v3 = milder turn bucket + fine forward-speed term + more high-speed commands, gated on speed *and* turning; then VelStand v6 from v4 with that anchor. Protective-fall rewards stay for a separate round (one variable at a time).
+10. ~~Speed round~~ Done: walk teacher v3 tracks speed; v6 / A / B / C carry it into VelStand; C is
+    `velstand_fast.onnx` in release v0.2 (2026-10-18). Was: speed round (pipeline 5, running since 2026-10-15 22:09): walk teacher v3 = milder turn bucket + fine forward-speed term + more high-speed commands, gated on speed *and* turning; then VelStand v6 from v4 with that anchor. Protective-fall rewards stay for a separate round (one variable at a time).
 11. Body-pose commands while walking (lift the standing gate).
 12. Fillers for idle GPU time: ablation of the stand-straight fix; episodic tricks — forward roll
     started 2026-10-15 (paused at iteration 301), one-leg stand, bow.
+13. Fast *and* robust (running since 2026-10-18 14:42): five one-change resumes from C, ranked by the
+    battery, best one through the release gate (`pipeline_round7_release_prep_and_search.sh`).

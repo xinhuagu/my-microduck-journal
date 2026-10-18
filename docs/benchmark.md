@@ -39,13 +39,14 @@ policies only). Cells are
 mean ± standard deviation over the three seeds. Raw JSON per policy, with every trial row and seed,
 is in [`results/benchmark/`](../results/benchmark/).
 
-## Results (2026-10-17, upstream `microduck_rl` @ `ceca0170`)
+## Results (2026-10-18, upstream `microduck_rl` @ `ceca0170`)
 
 | policy | seeds | get-up | get-up median | push 1.0 m/s recovered | push 1.2 m/s recovered | speed at 0.30 | yaw drift p90 | turn 0.3 | turn 0.6 | turn 1.0 | crouch −30 mm | pitch ±10° | pitch ±20° | roll ±10° | goal 1.5 m reached | goal reached after a 1.0 m/s push | goal median time (push) |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | official_velstand_v7 | 3 | 96 % ± 1 | 0.60 s ± 0.01 | 94 % ± 1 | 93 % ± 1 | 0.14 m/s ± 0.00 | 0.16 ± 0.01 | 0.00 ± 0.00 | 0.05 ± 0.01 | 0.38 ± 0.03 | -0.7 mm ± 0.0 | 8.0° ± 0.0 | 16.1° ± 0.0 | 7.8° ± 0.0 | 97 % ± 1 | 94 % ± 1 | 16.89 s ± 0.10 |
-| ours_velstand_v6 | 3 | 97 % ± 1 | 0.50 s ± 0.02 | 89 % ± 0 | 88 % ± 1 | 0.30 m/s ± 0.00 | 0.10 ± 0.01 | 0.00 ± 0.00 | 0.60 ± 0.01 | 1.08 ± 0.00 | -24.2 mm ± 0.0 | 9.7° ± 0.0 | 19.6° ± 0.0 | 9.8° ± 0.0 | 100 % ± 0 | 92 % ± 2 | 9.13 s ± 0.17 |
 | ours_velstand_v4 | 3 | 99 % ± 1 | 0.52 s ± 0.02 | 95 % ± 2 | 97 % ± 1 | 0.18 m/s ± 0.00 | 0.18 ± 0.01 | 0.00 ± 0.00 | 0.39 ± 0.01 | 1.10 ± 0.00 | -28.7 mm ± 0.1 | 10.0° ± 0.0 | 19.7° ± 0.0 | 9.6° ± 0.0 | 100 % ± 0 | 96 % ± 1 | 12.63 s ± 0.08 |
+| ours_velstand_fast_v02 | 3 | 99 % ± 1 | 0.56 s ± 0.03 | 93 % ± 2 | 93 % ± 2 | 0.29 m/s ± 0.00 | 0.09 ± 0.00 | 0.00 ± 0.00 | 0.58 ± 0.00 | 1.02 ± 0.00 | -28.7 mm ± 0.0 | 10.0° ± 0.0 | 20.3° ± 0.1 | 9.5° ± 0.0 | 100 % ± 0 | 95 % ± 2 | 9.58 s ± 0.17 |
+| ours_velstand_v6 | 3 | 97 % ± 1 | 0.50 s ± 0.02 | 89 % ± 0 | 88 % ± 1 | 0.30 m/s ± 0.00 | 0.10 ± 0.01 | 0.00 ± 0.00 | 0.60 ± 0.01 | 1.08 ± 0.00 | -24.2 mm ± 0.0 | 9.7° ± 0.0 | 19.6° ± 0.0 | 9.8° ± 0.0 | 100 % ± 0 | 92 % ± 2 | 9.13 s ± 0.17 |
 | ours_velstand_v5_turning | 3 | 95 % ± 0 | 0.57 s ± 0.01 | 89 % ± 2 | 89 % ± 1 | 0.12 m/s ± 0.00 | 0.06 ± 0.00 | 0.02 ± 0.00 | 0.68 ± 0.00 | 1.12 ± 0.00 | -25.8 mm ± 0.1 | 9.8° ± 0.0 | 19.4° ± 0.0 | 9.1° ± 0.0 | 100 % ± 0 | 90 % ± 1 | 16.97 s ± 0.06 |
 | ours_velstand_v2 | 3 | 97 % ± 1 | 0.52 s ± 0.01 | 85 % ± 1 | 86 % ± 0 | 0.18 m/s ± 0.00 | 0.18 ± 0.01 | 0.00 ± 0.00 | 0.38 ± 0.01 | 0.92 ± 0.00 | -0.5 mm ± 0.0 | 3.1° ± 0.0 | 3.2° ± 0.0 | 1.5° ± 0.0 | 100 % ± 0 | 89 % ± 1 | 12.59 s ± 0.09 |
 | official_alpha_walking | 3 | 0 % ± 0 | — | 4 % ± 1 | 0 % ± 0 | 0.15 m/s ± 0.00 | 0.11 ± 0.01 | 0.00 ± 0.00 | 0.02 ± 0.00 | 0.35 ± 0.01 | 0.1 mm ± 0.0 | 0.0° ± 0.0 | 0.1° ± 0.0 | 0.0° ± 0.0 | — | — | — |
@@ -59,9 +60,12 @@ Reading the table:
 
 - `official_*` are the files shipped on the official Hugging Face repository (`velstand.onnx` is the
   deployed walk + get-up policy, v7; `alpha_walking` and `alpha_stand` are the teachers it was
-  distilled from). `ours_*` are this repository's policies (release v0.1 and the training log).
+  distilled from). `ours_*` are this repository's policies (releases v0.1 / v0.2 and the training log).
   `ours_velstand_v6` is v4 re-anchored to the speed-tracking walk teacher v3 (not in a release:
   faster and better at turning, recovers fewer push falls).
+  `ours_velstand_fast_v02` is `velstand_fast.onnx` of release v0.2 (candidate C): the same fast anchor
+  with stronger stand-up imitation and more episodes starting on the side / back — the get-up is back
+  to v4's level, push recovery 93 % against v4's 95–97 %; see [findings.md](findings.md).
   `community_running_HannesVonEssen` is a community running policy trained for 1.65 m/s: it ignores
   the small commands used here (runs at 1.64 m/s whatever is asked), so its tracking cells are not a
   fault of the policy, and it has no get-up training.

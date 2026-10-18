@@ -53,7 +53,7 @@ What is different from the official setup:
 iteration-500 checkpoint in mjlab's native viewer (`uv run play ... --num-envs 64 --viewer native`)
 while the same GPU keeps training. Each duck starts an episode on the ground and has to get up.*
 
-## Status (2026-10-17)
+## Status (2026-10-18)
 
 ✅ = verified in simulation here · 🔄 = training / being tested.
 
@@ -64,10 +64,11 @@ while the same GPU keeps training. Each duck starts an episode on the ground and
 | Fall recovery (`Mjlab-VelStand-*`) | ✅ trained | The official recipe distils a stand-up expert from a **private** wandb project (HTTP 403), so the teachers were rebuilt here: a `StandUp` teacher (13 500 iterations, with stand-straight and command-relative rewards) and the walk teacher. The current walk + get-up policy is **VelStand v4** (release v0.1): get-up 99 % from face-down / face-up / on-side in a median 0.5 s, straight at the end; 95–97 % of push falls recovered at 1.0–1.2 m/s (official v7: 93–94 %). The way there — the 34° lean of v1, the stand-straight fix, rough terrain + backlash — is in [docs/velstand-without-private-teachers.md](docs/velstand-without-private-teachers.md) and [docs/training-log.md](docs/training-log.md) |
 | Body-pose commands (crouch / tilt while standing) | ✅ trained | Measured first: neither the walk+get-up policy nor the teacher crouched, and tilt tracked only to ~10°. With the teacher's fixed-pose rewards made command-relative ([`patches/body-wide.patch`](patches/body-wide.patch)), teacher v3 crouches and tilts; **VelStand v4** distilled from it crouches −28.6 mm for −30, tracks roll / pitch to within 1° at ±10° and ±20°, and recovers 94–98 % of push falls — see [docs/training-log.md](docs/training-log.md#velstand-v4-body-commands-inside-the-walk--get-up-network-2026-10-11-2300) |
 | Benchmark (256 envs × 3 seeds, any ONNX) | ✅ published | 10 policies — official, own, community — through one exam; v4 level or ahead of the official v7 on every column — see [docs/benchmark.md](docs/benchmark.md) |
-| Release | ✅ v0.1 | `velstand_v4.onnx` + v5 variant + teachers + evaluation JSONs + checksums — [releases/tag/v0.1](https://github.com/xinhuagu/my-microduck-journal/releases/tag/v0.1) |
+| Release | ✅ v0.2 | `velstand_default.onnx` (= v4) + **`velstand_fast.onnx`** (new: walks at the commanded speed) + walk teacher v3 + stand-up teacher v3 + evaluation JSONs + checksums — [releases/tag/v0.2](https://github.com/xinhuagu/my-microduck-journal/releases/tag/v0.2); earlier: [v0.1](https://github.com/xinhuagu/my-microduck-journal/releases/tag/v0.1) |
 | Navigation layer (walk to a goal) | ✅ measured | 20 lines on top of the policy turn a goal into velocity commands; v4 reaches a goal 1.5 m away 100 % of the time, 96 % after being pushed over on the way (official v7: 97 / 94 %) — see the GIF below and the benchmark's goal columns |
 | Turning (`patches/turn.patch`) | 🔄 partial | A walk teacher trained with slow in-place turns and a yaw-only fine term turns 0.6 rad/s → 0.65 and ±1.0 symmetrically with a third of the yaw drift, and VelStand v5 anchored to it inherits that — at the cost of walking speed (0.30 → 0.12 m/s). The 0.3 rad/s dead zone is unchanged. Next walk teacher has to be fast and turn — see [docs/training-log.md](docs/training-log.md#velstand-v5-the-turning-anchor-measured-2026-10-12-2200) |
-| Walking speed (`patches/speed.patch`) | ✅ in a variant | Every walk policy, official included, walked at ~60 % of the command. A fine forward-speed term in the walk teacher, carried into VelStand by the anchor, gives **v6: 0.30 m/s for 0.30, 0.41 for 0.45**, consistent turning, and a 1.5 m goal in 6.2 s (v4 9.7 s, official 13.8 s) — but 88–89 % push recovery against v4's 95–97 %, so v4 stays the release. Two v0.2 candidates showed that the recovery loss comes with the fast walk anchor itself, not with the speed reward; no candidate passed the release gate yet. See [docs/training-log.md](docs/training-log.md#v02-candidates-the-fast-anchor-is-what-costs-push-recovery-2026-10-17-2200) |
+| Walking speed (`patches/speed.patch`) | ✅ fast variant (v0.2) | Every walk policy, official included, walked at ~60 % of the command. A fine forward-speed term in the walk teacher, carried into VelStand by the anchor, gives the speed — and costs push recovery: not more falls, but more ducks left lying on the side / back. Aimed at that, **`velstand_fast.onnx`** (candidate C) walks **0.29 m/s for 0.30**, turns 0.58 for 0.6 rad/s, gets up 99 % like v4, reaches a 1.5 m goal in 6.5 s (v4 9.8 s, official 14.3 s) and recovers 92–95 % of push falls (v4 95–97 %, official 92–96 %). It misses the release gate agreed beforehand by 0.2–3 points, so v4 stays the default — see [docs/findings.md](docs/findings.md) |
+| Fast *and* robust | 🔄 searching | Automated: five short runs from the fast variant, one change each (anchor weight, stand-up imitation, speed term), ranked by the battery; the best one gets the full 3-seed exam and the release gate — [`scripts/pipeline_round7_release_prep_and_search.sh`](scripts/pipeline_round7_release_prep_and_search.sh) |
 
 ## Fall, get up, walk to the goal, stop
 
@@ -78,6 +79,12 @@ while the same GPU keeps training. Each duck starts an episode on the ground and
 20 lines on top of the policy (heading error → turn, distance → speed, inside 10 cm → stop); the
 policy itself only sees velocity commands. Over 256 ducks × 3 seeds, v4 reaches the goal 100 % of
 the time unpushed and 96 % after the push — see the benchmark's goal columns.*
+
+![velstand_fast.onnx (release v0.2): the same exam, faster](results/goal-v02-fast-push-getup-walk-stop.gif)
+
+*The same exam with `velstand_fast.onnx` (release v0.2): pushed at 1.0 m/s on the way, up again, on target
+at 7.5 s, 7 cm from the goal. Over 256 ducks × 3 seeds it reaches the goal in a median 6.5 s unpushed
+(v4 9.8 s, official 14.3 s), 95 % after the push.*
 
 ## Benchmark
 
@@ -91,6 +98,7 @@ raw JSON are in the doc and in `results/benchmark/`):
 |---|---|---|---|---|---|---|---|
 | official `velstand.onnx` (v7) | 96 % | 94 / 93 % | 0.14 m/s | 0.05 / 0.38 | −0.7 mm | 8.0° | 94 % |
 | **ours v4** (release v0.1) | **99 %** | **95 / 97 %** | **0.18 m/s** | 0.39 / 1.10 | **−28.7 mm** | **10.0°** | **96 %** |
+| **ours fast** (release v0.2) | **99 %** | 93 / 93 % | **0.29 m/s** | **0.58 / 1.02** | **−28.7 mm** | **10.0°** | 95 % |
 | ours v6 (speed variant) | 97 % | 89 / 88 % | **0.30 m/s** | **0.60 / 1.08** | −24.2 mm | 9.7° | 92 % |
 | ours v5 (turning variant) | 95 % | 89 / 89 % | 0.12 m/s | **0.68 / 1.12** | −25.8 mm | 9.8° | 90 % |
 | ours v2 | 97 % | 85 / 86 % | 0.18 m/s | 0.38 / 0.92 | −0.5 mm | 3.1° | 89 % |
@@ -177,6 +185,8 @@ docs/
   training-log.md                   one row per run: task, envs, iterations, time, outcome
   velstand-without-private-teachers.md   how to train fall recovery without the private wandb teachers
   benchmark.md                      the policy benchmark: method, how to run it, results
+  findings.md                       what the speed rounds showed: reward width, the anchor decides the gait,
+                                    why the fast anchor costs push recovery and how that was found
 scripts/
   export_all.sh                     export every checkpoint of a run to ONNX
   run_viewer.sh / tmux_viewer.sh    CPU MuJoCo viewer with the right env vars (tmux variant takes injected keys)
@@ -188,6 +198,10 @@ scripts/
   pipeline_round2_body_pose.sh      teacher v3 (body-pose) → VelStand v4
   pipeline_round3_turning.sh        walk teacher v2 (yaw fixes) → sweeps → VelStand v5
   pipeline_round4_speed.sh          walk teacher v3 (speed + mild turn) → battery gate → VelStand v6 → battery
+  pipeline_round5_*.sh / round6*.sh  v0.2 candidates A, B, C → sweep → 3-seed battery → release gate
+  pipeline_round7_release_prep_and_search.sh   release by rule (release_plan.py) → GIF, notes, checksums;
+                                    then the fast-and-robust search (search_board.py)
+  release_gate.py / pick_from_battery.py   the release gate, and checkpoint picks from battery sweeps
   pushtest.sh                       8 random pushes in the viewer: moved / went down / upright at the end
   posture_probe.sh                  trunk height, pitch, roll and joint angles before and after pushes
   bodypose_probe.sh                 commanded vs measured crouch / tilt
@@ -195,17 +209,20 @@ scripts/
   eval_battery.py / .sh             batched, fixed-seed battery: get-up per spawn type, push falls, tracking, body commands
   benchmark_all.sh / benchmark_table.py   run every policy through the battery (3 seeds) and build the table
   wslg_copymode.ps1                 check / fix the WSLg copy-mode blank window without wsl --shutdown
-patches/                            config diffs against upstream microduck_rl, applied in this order:
+patches/                            config diffs against upstream microduck_rl:
+  all-in-one.patch                  every change below plus the later knobs, in one diff (git apply)
   velstand-local-teachers.patch     MICRODUCK_STAND_EXPERT / MICRODUCK_WALK_ANCHOR = local checkpoint paths
   standup-stand-straight.patch      MICRODUCK_STANDUP_STRAIGHT=1 (teacher v2)
-  body-wide.patch                   MICRODUCK_BODY_WIDE=1 (teacher v3 / VelStand v4, in progress)
+  body-wide.patch                   MICRODUCK_BODY_WIDE=1 (teacher v3 / VelStand v4)
   turn.patch                        MICRODUCK_TURN=1 (walk teacher v2 / VelStand v5)
-  speed.patch                       MICRODUCK_SPEED=1 (walk teacher v3 / VelStand v6, in progress)
+  speed.patch                       MICRODUCK_SPEED=1 (walk teacher v3 / VelStand v6 / fast variant)
 results/                            screenshots used in this README and the docs
 ```
 
 Checkpoints (`.pt`) are not in this repo. The exported policies are on the
-[Releases page](https://github.com/xinhuagu/my-microduck-journal/releases): **v0.1** has `velstand_v4.onnx`
+[Releases page](https://github.com/xinhuagu/my-microduck-journal/releases): **v0.2** has `velstand_default.onnx`
+(= v4, the policy to use), `velstand_fast.onnx` (walks at the commanded speed), walk teacher v3, stand-up
+teacher v3, the evaluation JSONs and sha256 sums; **v0.1** has `velstand_v4.onnx`
 (the policy to use), the v5 turning variant, both teachers, the evaluation JSONs and sha256 sums,
 with the training provenance and the comparison table in the notes.
 
