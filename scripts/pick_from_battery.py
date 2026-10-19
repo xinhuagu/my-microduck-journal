@@ -23,6 +23,8 @@ for f in glob.glob(os.path.join(d, "*.json")):
     elif kind == "release":   # v0.2 candidates: recovery first, speed and turning capped at the bar
         sc = 2 * (g("push_recovered_1.0") + g("push_recovered_1.2")) + 2 * min(g("speed_at_0.30"), 0.30) \
              + 0.5 * min(g("turn_at_0.6"), 0.60) - 0.5 * g("drift_p90_at_0.30")
+    elif kind == "sideroll":  # side roll: full turn in the commanded direction and back on the feet, both sides
+        sc = g("sideroll_success_left") + g("sideroll_success_right") - 2 * g("sideroll_wrong_way")
     elif kind == "bodywalk":  # body commands while walking: keep walking, track the pose, keep push recovery
         sc = 2 * min(g("walk_speed_ratio_body"), 1.0) + min(-g("walk_crouch_mm_for_-20") / 20, 1.0) \
              + 0.5 * min(g("walk_pitch_deg_for_10") / 10, 1.0) + 0.5 * min(g("walk_roll_deg_for_10") / 10, 1.0) \
@@ -44,6 +46,9 @@ if kind == "walk":
 elif kind == "release":
     ok = sp >= 0.28 and p1 >= 0.95 and p2 >= 0.95
     gate = f"single-seed preview: speed@0.30 {sp:.2f} >= 0.28, push rec 1.0/1.2 {p1:.2f}/{p2:.2f} >= 0.95 (the 3-seed release gate decides)"
+elif kind == "sideroll":
+    ok = sc >= 1.6
+    gate = f"score {sc:.2f} = success left + right - 2 x wrong way (1.6 = 80 % each side)"
 elif kind == "bodywalk":
     ok = sc >= 8.0
     gate = f"score {sc:.2f} (max 9; the 3-seed gate in the spec decides)"

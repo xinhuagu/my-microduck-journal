@@ -524,6 +524,33 @@ of the range) plus an additive fine linear-velocity term and more high-speed com
 both numbers before any distillation; the 0.3 rad/s dead zone goes to the runtime command remap
 unless that teacher opens it.
 
+## A new skill: side roll, left or right, and get back up (2026-10-19 21:20)
+
+Not in the official set: the published policies have a forward roll (`roulade`), no sideways roll. Goal: on a
+left / right command, tip over sideways from standing, roll one full turn about the long axis, and get back on the
+feet.
+
+**Task** `Mjlab-SideRoll-Flat-MicroDuck` (new files `tasks/sideroll.py`, `tasks/microduck_sideroll_env_cfg.py`,
+in `patches/all-in-one.patch`). Built on the forward-roll environment, whose reward design took five runs
+upstream; the same structure with the roll axis swapped from pitch to the long axis:
+
+- one dense progress signal — paid increments of the max-so-far rotation in the commanded direction, capped at
+  5 rad/s, counted only while touching the ground (no ballistic flips) and only while the forward axis stays
+  near horizontal (a forward roll or a twist does not count);
+- standing rewards (composite, upright, height, sharp layer, a tax on lying in a heap, rise velocity) gated on
+  completing the turn — standing still earns nothing;
+- half the episodes start mid-roll (50–300°, legs tucked, with angular momentum), so the get-up after the roll
+  is practised from the start;
+- direction in the command's sideways slot (+1 left, −1 right); the left/right mirroring already used in
+  training makes one policy learn both sides.
+
+**Exam trial** `sideroll`: standing start, roll left, then roll right; *success* = one full turn (≥ 330°) in
+the commanded direction **and** standing (≥ 100 mm, tilt ≤ 15°) for the last 0.5 s of 6 s.
+
+**Gate and budget, fixed before the run** ([`experiments/sideroll_v1.toml`](../experiments/sideroll_v1.toml)):
+success ≥ 80 % on each side, wrong way ≤ 5 %. At most two training runs; if the gate is not passed after the
+second, stop and record it as an open problem. Run 1: 6 000 iterations from scratch, one `lab.py` command.
+
 ## Second skill through the loop: crouch / tilt while walking (2026-10-19 01:30)
 
 First run of the experiment loop as one tool ([`scripts/lab.py`](../scripts/lab.py), spec

@@ -1,0 +1,32 @@
+# New skill (not in the official set): on a left / right command, tip over sideways, roll one full turn about
+# the long axis, get back on the feet. Task Mjlab-SideRoll-Flat-MicroDuck (sideroll.py, built on the forward-roll
+# environment). Command: twist vy = +1 rolls left, -1 rolls right; symmetry augmentation teaches both sides.
+#
+# Budget fixed before the run (2026-10-19): at most TWO training runs. Run 1 = this spec (6 000 iterations from
+# scratch, ~2.6 h). Run 2 only if run 1 rolls but does not pass. If both sides are not >= 80 % after run 2: stop,
+# write it up as an open problem, no third run.
+name = "sideroll_v1"
+task = "Mjlab-SideRoll-Flat-MicroDuck"
+eval_task = "Mjlab-SideRoll-Flat-MicroDuck"
+iterations = 6000
+num_envs = 4096
+
+[start]
+mode = "scratch"
+
+[sweep]
+from = 2000
+every = 2            # checkpoints every 250 iterations -> every 500 here
+trials = "sideroll"
+seeds = "0"
+pick = "sideroll"
+
+[exam]
+trials = "sideroll"
+seeds = "0,1,2"
+
+# Fixed before the run: a full turn in the commanded direction AND standing at the end, >= 80 % on each side.
+[gate.bars]
+sideroll_success_left = ">= 0.8"
+sideroll_success_right = ">= 0.8"
+sideroll_wrong_way = "<= 0.05"

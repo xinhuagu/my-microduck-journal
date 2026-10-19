@@ -178,7 +178,7 @@ class Lab:
         ck = os.path.join(rd, f"model_{self.state['pick']}.pt")
         out = os.path.join(self.dir, "exam.json")
         self.log(f"exam: {ex['trials']}, seeds {ex['seeds']}")
-        self.exam(ck, "tracking,push" if self.smoke else ex["trials"], "0" if self.smoke else ex["seeds"],
+        self.exam(ck, self.s["sweep"]["trials"] if self.smoke else ex["trials"], "0" if self.smoke else ex["seeds"],
                   16 if self.smoke else ex["num_envs"], out, self.name)
         if not self.dry:
             if not os.path.exists(out):

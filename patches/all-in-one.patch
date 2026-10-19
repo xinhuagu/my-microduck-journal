@@ -1,7 +1,8 @@
 Every local change to upstream microduck_rl (ceca0170) in one diff: git apply patches/all-in-one.patch
-All changes are behind environment variables and default off (MICRODUCK_*; see docs/training-log.md). The per-feature
-patches next to this file are the same changes split by topic; this one also holds the later knobs
-(MICRODUCK_EXPERT_BC_COEF, MICRODUCK_GROUND_MIX, MICRODUCK_SPEED_FINE_W, MICRODUCK_ANCHOR_COEF, MICRODUCK_BODY_WALK).
+All changes to existing tasks are behind environment variables and default off (MICRODUCK_*; see docs/training-log.md).
+The per-feature patches next to this file are the same changes split by topic; this one also holds the later knobs
+(MICRODUCK_EXPERT_BC_COEF, MICRODUCK_GROUND_MIX, MICRODUCK_SPEED_FINE_W, MICRODUCK_ANCHOR_COEF, MICRODUCK_BODY_WALK)
+and the new side-roll task (Mjlab-SideRoll-Flat-MicroDuck: tasks/sideroll.py, tasks/microduck_sideroll_env_cfg.py).
 
 diff --git a/scripts/infer_policy.py b/scripts/infer_policy.py
 index 7b368df0..ddba6677 100755
@@ -16,6 +17,38 @@ index 7b368df0..ddba6677 100755
  BODY_CMD_MAX_XY = 0.02             # ±20 mm
  BODY_CMD_MAX_ANGLE = math.radians(30)  # ±30°
  
+diff --git a/src/mjlab_microduck/tasks/__init__.py b/src/mjlab_microduck/tasks/__init__.py
+index faa73668..78faa021 100644
+--- a/src/mjlab_microduck/tasks/__init__.py
++++ b/src/mjlab_microduck/tasks/__init__.py
+@@ -75,6 +75,10 @@ from .microduck_roulade_env_cfg import (
+     make_microduck_roulade_env_cfg,
+     MicroduckRouladeRlCfg,
+ )
++from .microduck_sideroll_env_cfg import (   # my-microduck-journal: side roll (not an upstream skill)
++    make_microduck_sideroll_env_cfg,
++    MicroduckSideRollRlCfg,
++)
+ from .backlash import make_backlash_variant
+ 
+ # Standard velocity task
+@@ -233,6 +237,16 @@ register_mjlab_task(
+     runner_cls=MicroduckOnPolicyRunner,
+ )
+ 
++# my-microduck-journal: side roll — on a left / right command (twist vy = +1 / -1), roll one full turn sideways
++# and get back up. Built on the roulade environment; task terms in sideroll.py.
++register_mjlab_task(
++    task_id="Mjlab-SideRoll-Flat-MicroDuck",
++    env_cfg=make_microduck_sideroll_env_cfg(),
++    play_env_cfg=make_microduck_sideroll_env_cfg(play=True),
++    rl_cfg=MicroduckSideRollRlCfg,
++    runner_cls=MicroduckOnPolicyRunner,
++)
++
+ # Backlash variants — ±1° serial gear play per servo + encoder-through-backlash
+ # actuator feedback and joint obs (see tasks/backlash.py). Each family keeps its
+ # base task's collision model: Velocity → robot_walk_backlash.xml,
 diff --git a/src/mjlab_microduck/tasks/distill.py b/src/mjlab_microduck/tasks/distill.py
 index 7c1c8c82..b2bcf0d7 100644
 --- a/src/mjlab_microduck/tasks/distill.py
@@ -242,6 +275,101 @@ index 85d642c5..57897c68 100644
 +    asset: Entity = env.scene[asset_cfg.name]
 +    cmd = env.command_manager.get_command(command_name)
 +    return torch.exp(-torch.square(cmd[:, 0] - asset.data.root_link_lin_vel_b[:, 0]) / std**2)
+diff --git a/src/mjlab_microduck/tasks/microduck_sideroll_env_cfg.py b/src/mjlab_microduck/tasks/microduck_sideroll_env_cfg.py
+new file mode 100644
+index 00000000..0727c2c7
+--- /dev/null
++++ b/src/mjlab_microduck/tasks/microduck_sideroll_env_cfg.py
+@@ -0,0 +1,89 @@
++"""Microduck side-roll task (my-microduck-journal): on a left / right command, tip over sideways, roll one full
++turn about the long axis, get back on the feet. Not an upstream skill (upstream has the forward roll, roulade).
++
++Built on the forward-roll environment (same robot model with full collisions, observations, domain
++randomisation, regularisers and their curricula); only the task terms change — see sideroll.py for the reward
++design and the direction convention (twist vy = +1 left, -1 right; symmetry augmentation teaches both sides).
++"""
++import math
++from dataclasses import replace
++
++from mjlab.envs import ManagerBasedRlEnvCfg
++from mjlab.managers import EventTermCfg, RewardTermCfg
++
++from mjlab_microduck.tasks import sideroll as sr
++from mjlab_microduck.tasks.microduck_roulade_env_cfg import (
++    MicroduckRouladeRlCfg,
++    STAND_Z,
++    TUCK_OVERRIDES,
++    _LEG_JOINTS,
++    make_microduck_roulade_env_cfg,
++)
++
++# A roll takes ~1.5-2 s, the get-up ~1.5 s, plus the tip-over from standing and a settle.
++EPISODE_LENGTH_S = 6.0
++MIDROLL_ANGLE_MIN = math.radians(50.0)    # 90 = on the side, 180 = on the back, 270 = other side
++MIDROLL_ANGLE_MAX = math.radians(300.0)   # past the landing gate's lower edge: dense data on the get-up
++LANDING_GATE_LO = math.radians(260.0)
++LANDING_GATE_HI = math.radians(330.0)
++RISE_GATE_LO = math.radians(180.0)
++RISE_GATE_HI = math.radians(260.0)
++
++_ROULADE_TERMS = ("roulade_progress", "roulade_overspeed", "roulade_head_pivot", "roulade_landing_composite",
++                  "roulade_upright_after_roll", "roulade_height_after_roll", "roulade_landing_sharp",
++                  "roulade_stand_tax", "roulade_rise_velocity", "roulade_sagittal", "roulade_lateral_vel",
++                  "roulade_flatness")
++
++
++def make_microduck_sideroll_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
++    cfg = make_microduck_roulade_env_cfg(play=play)
++    cfg.episode_length_s = EPISODE_LENGTH_S
++    for name in _ROULADE_TERMS:
++        cfg.rewards.pop(name, None)
++
++    gates = {"gate_lo": LANDING_GATE_LO, "gate_hi": LANDING_GATE_HI}
++    cfg.rewards["sideroll_progress"] = RewardTermCfg(
++        func=sr.sideroll_progress, weight=8.0, params={"target_angle": 2 * math.pi, "max_paid_rate": 5.0})
++    cfg.rewards["sideroll_overspeed"] = RewardTermCfg(
++        func=sr.sideroll_overspeed_penalty, weight=-0.1, params={"omega_max": 7.0})
++    cfg.rewards["sideroll_landing_composite"] = RewardTermCfg(
++        func=sr.sideroll_landing_composite, weight=4.0,
++        params={"target_height": STAND_Z, "height_std": 0.04, "upright_std": 0.40, "pose_std": 0.40,
++                "joint_indices": _LEG_JOINTS, **gates})
++    cfg.rewards["sideroll_upright_after_roll"] = RewardTermCfg(
++        func=sr.sideroll_upright_after_roll, weight=1.5, params=dict(gates))
++    cfg.rewards["sideroll_height_after_roll"] = RewardTermCfg(
++        func=sr.sideroll_height_after_roll, weight=1.0, params={"target_height": STAND_Z, "std": 0.04, **gates})
++    cfg.rewards["sideroll_landing_sharp"] = RewardTermCfg(
++        func=sr.sideroll_landing_sharp, weight=2.0,
++        params={"target_height": STAND_Z, "height_std": 0.015, "upright_std": 0.3, **gates})
++    cfg.rewards["sideroll_stand_tax"] = RewardTermCfg(
++        func=sr.sideroll_stand_tax, weight=5.0, params={"target_height": STAND_Z, **gates})
++    cfg.rewards["sideroll_rise_velocity"] = RewardTermCfg(
++        func=sr.sideroll_rise_velocity, weight=0.75,
++        params={"max_height": STAND_Z + 0.01, "gate_lo": RISE_GATE_LO, "gate_hi": RISE_GATE_HI})
++    cfg.rewards["sideroll_plane"] = RewardTermCfg(func=sr.sideroll_plane_penalty, weight=-0.1)
++    cfg.rewards["sideroll_forward_vel"] = RewardTermCfg(func=sr.sideroll_forward_velocity_penalty, weight=-0.5)
++    cfg.rewards["sideroll_plane_tilt"] = RewardTermCfg(func=sr.sideroll_plane_tilt_penalty, weight=-0.5)
++
++    # Direction command in the twist slot (written every step from the episode's direction).
++    cfg.commands["twist"] = sr.RollDirectionCommandCfg(**vars(cfg.commands["twist"]))
++
++    # Spawns: standing start or mid-roll (reverse curriculum); also draws the direction and resets the accumulator.
++    # Appended at the end of the event dict, i.e. after reset_robot_joints (the tuck lerps from the HOME pose).
++    old = cfg.events.pop("set_roulade_state")
++    cfg.events["set_sideroll_state"] = EventTermCfg(
++        func=sr.reset_sideroll_state, mode="reset",
++        params={"standing_prob": 0.5, "midroll_prob": 0.5, "standing_z_min": 0.11, "standing_z_max": 0.12,
++                "standing_tilt_max": math.radians(5.0), "midroll_angle_min": MIDROLL_ANGLE_MIN,
++                "midroll_angle_max": MIDROLL_ANGLE_MAX, "midroll_z_min": 0.05, "midroll_z_max": 0.10,
++                "midroll_omega_range": (0.0, 3.0), "tuck_overrides": TUCK_OVERRIDES, "tuck_factor_range": (0.3, 1.0),
++                "joint_noise_std": old.params.get("joint_noise_std", 0.08)})
++    if "roulade_spawn_mix" in cfg.curriculum:
++        cfg.curriculum["sideroll_spawn_mix"] = cfg.curriculum.pop("roulade_spawn_mix")
++        cfg.curriculum["sideroll_spawn_mix"].params["event_name"] = "set_sideroll_state"
++    return cfg
++
++
++MicroduckSideRollRlCfg = replace(
++    MicroduckRouladeRlCfg, experiment_name="microduck_sideroll", run_name="microduck_sideroll", max_iterations=6000)
 diff --git a/src/mjlab_microduck/tasks/microduck_standup_env_cfg.py b/src/mjlab_microduck/tasks/microduck_standup_env_cfg.py
 index 358b567c..b7bac981 100644
 --- a/src/mjlab_microduck/tasks/microduck_standup_env_cfg.py
@@ -464,3 +592,296 @@ index 929c4bb2..139e7f92 100644
              **({"unanchor_turn_in_place": True} if ENABLE_YAW_FIX else {}),
          } if ENABLE_EXPERT_BC else None,
      ),
+diff --git a/src/mjlab_microduck/tasks/sideroll.py b/src/mjlab_microduck/tasks/sideroll.py
+new file mode 100644
+index 00000000..05fe8e1a
+--- /dev/null
++++ b/src/mjlab_microduck/tasks/sideroll.py
+@@ -0,0 +1,287 @@
++"""Side roll (my-microduck-journal): on a left / right command, tip over sideways, roll one full turn about the
++body's long axis, and get back on the feet.
++
++Adapted from the forward-roll (roulade) design in mdp.py, which needed five runs upstream to get right; the same
++lessons apply here, with the roll axis swapped from pitch (body y) to roll (body x):
++  - ONE dense progress signal: paid increments of the max-so-far rotation in the commanded direction, capped at
++    max_paid_rate (rotating faster forfeits the excess), support-gated (rotation only counts while the robot
++    touches the ground: a ballistic flip earns nothing) and gated on the roll plane (the body's forward axis must
++    stay near horizontal: a forward roll or a twist does not count as side-roll progress).
++  - Landing rewards (standing composite, upright, height, sharp layer, stand tax, rise velocity) gated on ROLL
++    COMPLETION — state-based, never on a clock. Standing still earns nothing; only rolling opens them.
++  - Reverse curriculum via mid-roll spawns: a slice of episodes starts 50-300 deg into the roll, tucked, with
++    angular momentum, accumulator pre-set to the spawn angle.
++  - No head latch: a side roll has no "over the head" phase.
++
++Direction: twist command slot vy = +1 rolls LEFT (towards body +y), -1 rolls RIGHT. Rolling towards +y lowers the
++left side, i.e. rotation about body +x is NEGATIVE, so progress rate = -dir * omega_x. The repo's symmetry
++augmentation negates vy and omega_x together, so mirrored samples stay consistent and one policy learns both.
++
++Per-env state on the env object (created lazily, reset by reset_sideroll_state):
++  env._sr_dir   +1 / -1 commanded direction        env._sr_accum  supported, plane-gated rotation (rad)
++  env._sr_max   frontier (max of accum)            env._sr_paid   frontier already paid by sideroll_progress
++"""
++from __future__ import annotations
++
++import math
++from dataclasses import dataclass
++from typing import Optional
++
++import torch
++
++from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnv
++from mjlab.managers.scene_entity_config import SceneEntityCfg
++
++from mjlab_microduck.tasks.mdp import (
++    VelocityCommandCommandOnly,
++    VelocityCommandCommandOnlyCfg,
++    _env_origin_z,
++    _sensor_any_contact,
++    _servo_joint_ids,
++    standing_composite_score,
++)
++
++_DEFAULT_ASSET_CFG = SceneEntityCfg("robot")
++SUPPORT_SENSOR = "robot_ground_contact"
++# Roll-plane gate: world-z of the body's forward (x) axis. Full credit within ~30 deg of horizontal, none beyond ~60.
++_PLANE_FULL = 0.5
++_PLANE_ZERO = 0.866
++
++
++def _forward_axis_z(quat: torch.Tensor) -> torch.Tensor:
++    """World-z component of the body's forward (x) axis: 2(qx*qz - qw*qy). 0 = forward axis horizontal."""
++    return 2.0 * (quat[:, 1] * quat[:, 3] - quat[:, 0] * quat[:, 2])
++
++
++def _smoothstep(t: torch.Tensor) -> torch.Tensor:
++    t = torch.clamp(t, 0.0, 1.0)
++    return t * t * (3.0 - 2.0 * t)
++
++
++def state(env: ManagerBasedRlEnv):
++    if not hasattr(env, "_sr_accum"):
++        z = torch.zeros(env.num_envs, device=env.device)
++        env._sr_accum, env._sr_max, env._sr_paid = z.clone(), z.clone(), z.clone()
++        env._sr_dir = torch.ones(env.num_envs, device=env.device)
++        env._sr_last_step = -1
++    return env._sr_accum, env._sr_max, env._sr_paid
++
++
++def _update(env: ManagerBasedRlEnv, asset) -> None:
++    """Integrate the commanded-direction roll rate once per control step (several terms read it)."""
++    state(env)
++    step = int(env.common_step_counter)
++    if step == env._sr_last_step:
++        return
++    omega = -env._sr_dir * torch.nan_to_num(asset.data.root_link_ang_vel_b[:, 0], nan=0.0)
++    delta = omega * env.step_dt
++    supported = _sensor_any_contact(env, SUPPORT_SENSOR)
++    if supported is not None:
++        delta = delta * supported.float()
++    fz = torch.nan_to_num(_forward_axis_z(asset.data.root_link_quat_w), nan=1.0).abs()
++    delta = delta * _smoothstep((_PLANE_ZERO - fz) / (_PLANE_ZERO - _PLANE_FULL))
++    env._sr_accum = env._sr_accum + delta
++    env._sr_max = torch.maximum(env._sr_max, env._sr_accum)
++    env._sr_last_step = step
++
++
++def completion_gate(env: ManagerBasedRlEnv, gate_lo: float, gate_hi: float) -> torch.Tensor:
++    _, mx, _ = state(env)
++    return _smoothstep((mx - gate_lo) / max(gate_hi - gate_lo, 1e-6))
++
++
++def _z(env, asset) -> torch.Tensor:
++    return torch.nan_to_num(asset.data.root_link_pos_w[:, 2] - env.scene.terrain.env_origins[:, 2], nan=0.0)
++
++
++# ----------------------------------------------------------------------------- command
++class RollDirectionCommand(VelocityCommandCommandOnly):
++    """Twist-slot command [0, dir, 0], dir = env._sr_dir (+1 left, -1 right), written every step so the
++    observation always carries the direction that reset_sideroll_state chose for the episode."""
++
++    def _resample_command(self, env_ids: torch.Tensor) -> None:
++        super()._resample_command(env_ids)
++        self._write()
++
++    def _update_command(self) -> None:
++        self._write()
++
++    def _write(self) -> None:
++        state(self._env)
++        self.vel_command_b[:] = 0.0
++        self.vel_command_b[:, 1] = self._env._sr_dir
++        self.is_standing_env[:] = False
++
++    def _update_metrics(self) -> None:
++        pass
++
++
++@dataclass(kw_only=True)
++class RollDirectionCommandCfg(VelocityCommandCommandOnlyCfg):
++    def build(self, env: ManagerBasedRlEnv) -> "RollDirectionCommand":
++        return RollDirectionCommand(self, env)
++
++
++# ----------------------------------------------------------------------------- reset
++def reset_sideroll_state(
++    env: ManagerBasedRlEnv,
++    env_ids: torch.Tensor,
++    asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
++    standing_prob: float = 0.5,
++    midroll_prob: float = 0.5,
++    standing_z_min: float = 0.11,
++    standing_z_max: float = 0.12,
++    standing_tilt_max: float = math.radians(5.0),
++    midroll_angle_min: float = math.radians(50.0),
++    midroll_angle_max: float = math.radians(300.0),
++    midroll_z_min: float = 0.05,
++    midroll_z_max: float = 0.10,
++    midroll_omega_range: tuple = (0.0, 3.0),
++    tuck_overrides: Optional[dict] = None,
++    tuck_factor_range: tuple = (0.3, 1.0),
++    joint_noise_std: float = 0.0,
++):
++    """Standing start or mid-roll state; draws the episode's direction (+1 left / -1 right) per env."""
++    if env_ids is None or len(env_ids) == 0:
++        return
++    env_ids = env_ids.to(env.device, dtype=torch.long)
++    n = len(env_ids)
++    asset = env.scene[asset_cfg.name]
++    accum, mx, paid = state(env)
++    dev = env.device
++
++    direction = torch.where(torch.rand(n, device=dev) < 0.5, -1.0, 1.0)
++    env._sr_dir[env_ids] = direction
++    is_mid = torch.rand(n, device=dev) < (midroll_prob / max(standing_prob + midroll_prob, 1e-6))
++
++    yaw = torch.rand(n, device=dev) * 2 * math.pi - math.pi
++    pitch = (torch.rand(n, device=dev) * 2 - 1) * standing_tilt_max
++    roll = (torch.rand(n, device=dev) * 2 - 1) * standing_tilt_max
++    angle = torch.rand(n, device=dev) * (midroll_angle_max - midroll_angle_min) + midroll_angle_min
++    # Rolling LEFT by `angle` = rotation about body x by -angle (see module docstring).
++    roll = torch.where(is_mid, -direction * angle, roll)
++    pitch = torch.where(is_mid, pitch * 0.5, pitch)
++
++    cy, sy = torch.cos(yaw * 0.5), torch.sin(yaw * 0.5)
++    cp, sp = torch.cos(pitch * 0.5), torch.sin(pitch * 0.5)
++    cr, sr = torch.cos(roll * 0.5), torch.sin(roll * 0.5)
++    quat = torch.stack([cr * cp * cy + sr * sp * sy, sr * cp * cy - cr * sp * sy,
++                        cr * sp * cy + sr * cp * sy, cr * cp * sy - sr * sp * cy], dim=1)
++    z = torch.where(is_mid,
++                    torch.rand(n, device=dev) * (midroll_z_max - midroll_z_min) + midroll_z_min,
++                    torch.rand(n, device=dev) * (standing_z_max - standing_z_min) + standing_z_min)
++    env.sim.data.qpos[env_ids, 2] = z + _env_origin_z(env, env_ids)
++    env.sim.data.qpos[env_ids, 3:7] = quat
++    env.sim.data.qvel[env_ids, :6] = 0.0
++
++    servo_ids = _servo_joint_ids(env, asset)
++    mid_ids = env_ids[is_mid]
++    if len(mid_ids) > 0 and tuck_overrides:
++        u = torch.rand(len(mid_ids), device=dev) * (tuck_factor_range[1] - tuck_factor_range[0]) + tuck_factor_range[0]
++        for j, target in tuck_overrides.items():
++            col = 7 + servo_ids[j]
++            home = env.sim.data.qpos[mid_ids, col]
++            env.sim.data.qpos[mid_ids, col] = home + u * (target - home)
++    if len(mid_ids) > 0 and joint_noise_std > 0.0:
++        cols = torch.tensor([7 + j for j in servo_ids], device=dev, dtype=torch.long)
++        env.sim.data.qpos[mid_ids.unsqueeze(1), cols.unsqueeze(0)] += torch.randn(len(mid_ids), len(cols), device=dev) * joint_noise_std
++    if len(mid_ids) > 0 and midroll_omega_range[1] > 0.0:
++        w = torch.rand(len(mid_ids), device=dev) * (midroll_omega_range[1] - midroll_omega_range[0]) + midroll_omega_range[0]
++        env.sim.data.qvel[mid_ids, 3] = -direction[is_mid] * w   # body-frame omega_x, in the rolling direction
++
++    start = torch.where(is_mid, angle, torch.zeros_like(angle))
++    accum[env_ids] = start
++    mx[env_ids] = start
++    paid[env_ids] = start
++
++
++# ----------------------------------------------------------------------------- rewards
++def sideroll_progress(env, target_angle: float = 2 * math.pi, max_paid_rate: float = 5.0,
++                      asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG) -> torch.Tensor:
++    """Paid increments of the rotation frontier up to one full turn, capped at max_paid_rate rad/s."""
++    asset = env.scene[asset_cfg.name]
++    _update(env, asset)
++    _, mx, paid = state(env)
++    new_paid = torch.clamp(mx, max=target_angle)
++    delta = torch.clamp(new_paid - torch.clamp(paid, max=target_angle), min=0.0)
++    delta = torch.clamp(delta, max=max_paid_rate * env.step_dt)
++    env._sr_paid = torch.maximum(paid, new_paid)
++    return delta / (env.step_dt * target_angle)
++
++
++def sideroll_overspeed_penalty(env, omega_max: float = 7.0, asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG) -> torch.Tensor:
++    """max(0, |omega_x| - omega_max)^2 (positive; negative weight): taxes whips, not the natural tumble."""
++    w = torch.nan_to_num(env.scene[asset_cfg.name].data.root_link_ang_vel_b[:, 0], nan=0.0)
++    return torch.clamp(w.abs() - omega_max, min=0.0).pow(2)
++
++
++def sideroll_plane_penalty(env, asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG) -> torch.Tensor:
++    """Rotation out of the roll plane: omega_y^2 + omega_z^2 (positive; negative weight)."""
++    w = env.scene[asset_cfg.name].data.root_link_ang_vel_b
++    return torch.nan_to_num(w[:, 1].pow(2) + w[:, 2].pow(2), nan=0.0)
++
++
++def sideroll_forward_velocity_penalty(env, asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG) -> torch.Tensor:
++    """Body-frame forward (x) linear velocity^2: roll sideways, do not travel forward / back."""
++    return torch.nan_to_num(env.scene[asset_cfg.name].data.root_link_lin_vel_b[:, 0].pow(2), nan=0.0)
++
++
++def sideroll_plane_tilt_penalty(env, asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG) -> torch.Tensor:
++    """|world-z of the forward axis|: dense pull back into the roll plane (positive; negative weight)."""
++    q = env.scene[asset_cfg.name].data.root_link_quat_w
++    return torch.nan_to_num(_forward_axis_z(q).abs(), nan=0.0)
++
++
++def sideroll_landing_composite(env, target_height: float, height_std: float, upright_std: float, pose_std: float,
++                               joint_indices: list, gate_lo: float, gate_hi: float,
++                               asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG) -> torch.Tensor:
++    """Standing composite (height x upright x pose) x completion gate: the annuity for ending on the feet."""
++    _update(env, env.scene[asset_cfg.name])
++    score = standing_composite_score(env, target_height=target_height, height_std=height_std,
++                                     upright_std=upright_std, pose_std=pose_std, joint_indices=joint_indices,
++                                     target_overrides=None, asset_cfg=asset_cfg)
++    return score * completion_gate(env, gate_lo, gate_hi)
++
++
++def sideroll_upright_after_roll(env, gate_lo: float, gate_hi: float,
++                                asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG) -> torch.Tensor:
++    asset = env.scene[asset_cfg.name]
++    _update(env, asset)
++    q = asset.data.root_link_quat_w
++    upright = 1.0 - 2.0 * (q[:, 1].pow(2) + q[:, 2].pow(2))
++    return torch.clamp(upright, min=0.0) * completion_gate(env, gate_lo, gate_hi)
++
++
++def sideroll_height_after_roll(env, target_height: float, std: float, gate_lo: float, gate_hi: float,
++                               asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG) -> torch.Tensor:
++    asset = env.scene[asset_cfg.name]
++    _update(env, asset)
++    return torch.exp(-((_z(env, asset) - target_height) / std) ** 2) * completion_gate(env, gate_lo, gate_hi)
++
++
++def sideroll_landing_sharp(env, target_height: float, height_std: float, upright_std: float, gate_lo: float,
++                           gate_hi: float, asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG) -> torch.Tensor:
++    """Tight upright x height Gaussians x completion gate: finish standing straight, not in a lean."""
++    asset = env.scene[asset_cfg.name]
++    _update(env, asset)
++    q = asset.data.root_link_quat_w
++    tilt_sq = 2.0 * (q[:, 1].pow(2) + q[:, 2].pow(2))
++    return (torch.exp(-tilt_sq / (upright_std ** 2)) * torch.exp(-((_z(env, asset) - target_height) / height_std) ** 2)
++            * completion_gate(env, gate_lo, gate_hi))
++
++
++def sideroll_stand_tax(env, target_height: float, gate_lo: float, gate_hi: float,
++                       asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG) -> torch.Tensor:
++    """Self-negating height shortfall after completion (positive weight): lying in a heap after the roll costs."""
++    asset = env.scene[asset_cfg.name]
++    _update(env, asset)
++    return -torch.clamp(target_height - _z(env, asset), min=0.0) * completion_gate(env, gate_lo, gate_hi)
++
++
++def sideroll_rise_velocity(env, max_height: float, gate_lo: float, gate_hi: float,
++                           asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG) -> torch.Tensor:
++    """Upward trunk velocity below max_height x late-roll gate: bootstraps the get-up after the roll."""
++    asset = env.scene[asset_cfg.name]
++    _update(env, asset)
++    vz = torch.nan_to_num(asset.data.root_link_lin_vel_w[:, 2], nan=0.0)
++    return torch.clamp(vz, min=0.0) * (_z(env, asset) < max_height).float() * completion_gate(env, gate_lo, gate_hi)

@@ -452,6 +452,48 @@ def trial_bodywalk(duck: Duck, seconds: float = 6.0, vx: float = 0.20):
     return rows
 
 
+def trial_sideroll(duck: Duck, seconds: float = 6.0):
+    """Side roll (task Mjlab-SideRoll-Flat-MicroDuck): standing start, command roll LEFT then RIGHT (twist vy = +1 / -1).
+    completed = one full turn (>= 330 deg, ground-supported, in the roll plane — the task's own accumulator) in the
+    commanded direction; up_at_end = trunk >= 100 mm and tilt <= 15 deg for the last 0.5 s; success = both;
+    wrong_way = more than half a turn the other way (free integral of the roll rate)."""
+    u = duck.u
+    try:
+        from mjlab_microduck.tasks import sideroll as sr
+    except ImportError:
+        return []
+    if "sideroll_progress" not in getattr(getattr(u, "reward_manager", None), "active_terms", []):
+        return []
+    rows = []
+    full = math.radians(330.0)
+    for d, label in ((1.0, "left"), (-1.0, "right")):
+        duck.spawn("upright")
+        acc, mx, paid = sr.state(u)
+        acc.zero_(); mx.zero_(); paid.zero_()
+        u._sr_dir[:] = d
+        T = int(round(seconds / duck.dt))
+        free = torch.zeros(duck.n, device=duck.dev)
+        fr, up = [], []
+        for _ in range(T):
+            duck.step()
+            m = duck.measure()
+            free += -d * torch.nan_to_num(duck.robot.data.root_link_ang_vel_b[:, 0], nan=0.0) * duck.dt
+            fr.append(u._sr_max.clone())
+            up.append((m["z"] >= UP_Z) & (m["tilt"] <= UP_TILT_DEG))
+        fr, up = torch.stack(fr), torch.stack(up)
+        done = fr[-1] >= full
+        t_done = torch.where(done, (fr >= full).float().argmax(0).float() * duck.dt, torch.full_like(free, float("nan")))
+        up_end = up[-int(round(0.5 / duck.dt)):].all(0)
+        rows.append({
+            "direction": label, "n": duck.n,
+            "completed": float(done.float().mean()), "up_at_end": float(up_end.float().mean()),
+            "success": float((done & up_end).float().mean()), "median_time_s": nanmedian(t_done),
+            "wrong_way": float((free < -math.pi).float().mean()),
+            "rotation_deg_median": float(torch.rad2deg(free).median()),
+        })
+    return rows
+
+
 # ----------------------------------------------------------------------------- goal reaching (navigation layer)
 GOAL_DIST = 1.5          # m from the spawn point, random bearing
 GOAL_TOL = 0.10          # m: "reached" when inside this for 1 s
@@ -549,6 +591,8 @@ def run_trials(duck: Duck, only: set[str]) -> dict:
             out["body"] = trial_body(duck)
         if "bodywalk" in only:
             out["bodywalk"] = trial_bodywalk(duck)
+        if "sideroll" in only:
+            out["sideroll"] = trial_sideroll(duck)
         if "goal" in only:
             out["goal"] = trial_goal(duck)
     return out
@@ -599,6 +643,15 @@ def summarize(res: dict) -> dict:
             body = [r["vx"] for r in bw if r["case"] != "walk"]
             s["walk_speed_ratio_body"] = sum(body) / len(body) / by["walk"]["vx"]
         s["walk_body_fell"] = max(r["fell"] for r in bw)
+    sr_rows = res.get("sideroll")
+    if sr_rows:
+        for r in sr_rows:
+            for k in ("success", "completed", "up_at_end"):
+                s[f"sideroll_{k}_{r['direction']}"] = r[k]
+        s["sideroll_wrong_way"] = max(r["wrong_way"] for r in sr_rows)
+        times = [r["median_time_s"] for r in sr_rows if r["median_time_s"] == r["median_time_s"]]
+        if times:
+            s["sideroll_time_s"] = sum(times) / len(times)
     g = res.get("goal")
     if g:
         for r in g:
@@ -643,6 +696,10 @@ def print_tables(res: dict):
         print("\n| case | dz mm | roll ° | pitch ° | fell |\n|---|---|---|---|---|")
         for r in res["body"]:
             print(f"| {r['case']} | {r['dz_mm']:+.1f} | {r['roll_deg']:+.1f} | {r['pitch_deg']:+.1f} | {fmt_pct(r['fell'])} |")
+    if res.get("sideroll"):
+        print("\n| side roll | full turn | up at the end | success | median time to full turn | wrong way | rotation (median) |\n|---|---|---|---|---|---|---|")
+        for r in res["sideroll"]:
+            print(f"| {r['direction']} | {fmt_pct(r['completed'])} | {fmt_pct(r['up_at_end'])} | {fmt_pct(r['success'])} | {r['median_time_s']:.2f} s | {fmt_pct(r['wrong_way'])} | {r['rotation_deg_median']:+.0f}° |")
     if res.get("bodywalk"):
         print("\n| walking 0.20 m/s + | dz mm | roll ° | pitch ° | vx | fell |\n|---|---|---|---|---|---|")
         for r in res["bodywalk"]:
