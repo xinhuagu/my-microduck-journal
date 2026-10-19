@@ -554,7 +554,30 @@ teacher does not crouch) and never go to the stand-up teacher (it does not walk)
 bodywalk), pick by a `bodywalk` score, 3-seed exam with the new trial. **Gate, fixed before the run**:
 speed while posing ≥ 80 % of the plain walk, crouch ≤ −14 mm for −20, roll and pitch ≥ 7° for ±10°, no falls
 (≤ 2 %), and no regression against v4: worst push cell ≥ 94 %, get-up ≥ 98 %, standing crouch ≤ −27 mm, speed
-at 0.30 ≥ 0.17 m/s, pushed goal ≥ 95 %. Result: below once the run finishes.
+at 0.30 ≥ 0.17 m/s, pushed goal ≥ 95 %.
+
+**Result (2026-10-19 03:48, one command, unattended: train 1 h 43 min → sweep 16 min → exam 20 min).**
+Sweep picked `model_4000`; 3-seed exam (raw JSON and the run's own log in `results/benchmark/bodywalk_v1/`):
+
+| | v4 | **bodywalk_v1 `4000`** | bar |
+|---|---|---|---|
+| speed while posing / plain walk (0.20 m/s command) | 0.03–0.00 / 0.12 → 0.05 | 0.03–0.00 / 0.12 → **0.04** | ≥ 0.8 — **MISS** |
+| crouch while walking for −20 mm | −17.7 mm (stopped) | −19.9 mm (stopped) | ≤ −14 |
+| pitch / roll while walking for ±10° | 10.0 / 9.8° (stopped) | 9.7 / 9.0° (stopped) | ≥ 7 |
+| push recovered, standing 1.0 / 1.2, walking 1.0 / 1.2 m/s | 95.3 / 96.7 / 94.9 / 96.6 % | **98.2 / 98.0 / 96.3 / 96.7 %** | worst ≥ 94 % |
+| get-up; standing crouch for −30 mm | 98.7 %; −28.7 mm | 98.4 %; −28.0 mm | ≥ 98 %; ≤ −27 |
+| speed at 0.30; turn at 0.6; pushed goal | 0.18; 0.39; 96 % | 0.18; 0.39; 95 % | ≥ 0.17; —; ≥ 95 % |
+
+**Gate: FAIL — the skill was not learned.** The duck still stops as soon as a body command arrives, then
+poses (now slightly better than v4). Everything the run must not break held, and push recovery even rose
+in every cell. Reading: during training a walking duck with a body command earns the full body-tracking
+reward (weight 3, height std 1 cm) by standing still, and gives up only part of the velocity-tracking
+reward — stopping is the better deal under this reward, and the policy already knew "body command →
+stand". Next attempt (one change): make the body-tracking reward for walking envs looser and lighter
+(e.g. ×0.3, height std 2 cm), so walking while posing pays more than stopping; same spec, same gate.
+
+What this run shows about the loop itself: the new trial and the gate fixed in advance caught a failure
+that every other number hid — the policy looked better than v4 on the standard exam.
 
 ## Search for fast *and* robust: the anchor weight is the trade knob (2026-10-18 23:10)
 

@@ -113,7 +113,8 @@ Every change is behind a `MICRODUCK_*` environment variable and off by default;
 | Turning on the spot | ✅ / 🔄 | 0.6 and 1.0 rad/s tracked; 0.3 rad/s still a dead zone (official too) |
 | Walk to a goal (20-line controller on top) | ✅ | 100 % reached, 95–96 % after being pushed over on the way |
 | Open benchmark | ✅ | 12 policies, official and community included |
-| Fast **and** as robust as the default | 🔄 | close: a fast policy with 95–96 % push recovery exists, it misses the gate on turning and crouch |
+| Fast **and** as robust as the default | 🔄 | close: a fast policy with 95–96 % push recovery exists but turns too little; more walk-teacher weight brings turning back and costs push recovery — next: a weight that depends on the command |
+| Crouch / tilt **while walking** (second skill through the loop) | 🔄 | measured: every policy stops walking when a body command arrives; first attempt still stops (gate FAIL, nothing else broke) — [details](docs/training-log.md#second-skill-through-the-loop-crouch--tilt-while-walking-2026-10-19-0130) |
 | Release | ✅ | [v0.2](https://github.com/xinhuagu/my-microduck-journal/releases/tag/v0.2) (earlier: [v0.1](https://github.com/xinhuagu/my-microduck-journal/releases/tag/v0.1)) |
 
 ## How it was built

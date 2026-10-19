@@ -1,0 +1,40 @@
+=== 2026-10-19T01:28:19 LAB START bodywalk_v1
+=== 2026-10-19T01:28:19 train: Mjlab-VelStand-Rough-Backlash-MicroDuck, resume from logs/rsl_rl/velstand/2026-10-11_19-13-04_velstand/model_2999.pt, 1500 iterations, 4096 envs, env {'MICRODUCK_BODY_WIDE': '1', 'MICRODUCK_STAND_EXPERT': 'logs/rsl_rl/microduck_stand/2026-10-11_17-53-45_microduck_stand/model_2999.pt', 'MICRODUCK_WALK_ANCHOR': 'logs/rsl_rl/velocity/2026-09-07_20-38-41_first-walk/model_10000.pt', 'MICRODUCK_BODY_WALK': '0.3'}
+=== 2026-10-19T03:11:41 train: done, run logs/rsl_rl/velstand/2026-10-19_01-28-28_velstand
+=== 2026-10-19T03:11:41 sweep: 5 checkpoints (tracking,push,bodywalk, seeds 0)
+   3500  score +5.877  speed@0.30 0.18  turn 0.3/0.6 0.00/0.55  drift p90 0.18  push rec 1.0/1.2 0.97/0.98
+   3750  score +5.823  speed@0.30 0.19  turn 0.3/0.6 0.00/0.47  drift p90 0.18  push rec 1.0/1.2 0.96/0.96
+   4000  score +5.889  speed@0.30 0.18  turn 0.3/0.6 0.00/0.40  drift p90 0.21  push rec 1.0/1.2 0.97/0.97
+   4250  score +5.866  speed@0.30 0.17  turn 0.3/0.6 0.00/0.20  drift p90 0.30  push rec 1.0/1.2 0.99/0.99
+   4498  score +5.777  speed@0.30 0.19  turn 0.3/0.6 0.00/0.27  drift p90 0.20  push rec 1.0/1.2 0.98/0.98
+PICK 4000 FAIL (score 5.89 (max 9; the 3-seed gate in the spec decides))
+=== 2026-10-19T03:28:01 pick: model_4000.pt
+=== 2026-10-19T03:28:01 exam: getup,push,tracking,body,bodywalk,goal, seeds 0,1,2
+=== 2026-10-19T03:48:02 export: exports/bodywalk_v1_4000.onnx
+
+bodywalk_v1  (/home/ubuntu/microduck_rl/logs/lab/bodywalk_v1/exam.json)  -> FAIL
+  MISS walk_speed_ratio_body          0.043   (bar >= 0.8)
+  ok   walk_crouch_mm_for_-20       -19.899   (bar <= -14)
+  ok   walk_pitch_deg_for_10          9.736   (bar >= 7)
+  ok   walk_roll_deg_for_10           8.971   (bar >= 7)
+  ok   walk_body_fell                 0.000   (bar <= 0.02)
+  ok   push_worst                     0.963   (bar >= 0.94)
+  ok   getup_recovered                0.984   (bar >= 0.98)
+  ok   crouch_mm_for_-30            -28.003   (bar <= -27)
+  ok   speed_at_0.30                  0.176   (bar >= 0.17)
+  ok   goal_reached_push              0.951   (bar >= 0.95)
+
+ours_velstand_v4  (/home/ubuntu/microduck_rl/logs/eval/ours_velstand_v4.json)  -> FAIL
+  MISS walk_speed_ratio_body            nan   (bar >= 0.8)
+  MISS walk_crouch_mm_for_-20           nan   (bar <= -14)
+  MISS walk_pitch_deg_for_10            nan   (bar >= 7)
+  MISS walk_roll_deg_for_10             nan   (bar >= 7)
+  MISS walk_body_fell                   nan   (bar <= 0.02)
+  ok   push_worst                     0.949   (bar >= 0.94)
+  ok   getup_recovered                0.987   (bar >= 0.98)
+  ok   crouch_mm_for_-30            -28.671   (bar <= -27)
+  ok   speed_at_0.30                  0.179   (bar >= 0.17)
+  ok   goal_reached_push              0.961   (bar >= 0.95)
+=== 2026-10-19T03:48:02 gate: FAIL
+=== 2026-10-19T03:48:02 ledger: /home/ubuntu/microduck_rl/logs/lab/ledger.jsonl
+=== 2026-10-19T03:48:02 PIPELINE DONE (lab bodywalk_v1)
