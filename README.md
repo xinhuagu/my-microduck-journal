@@ -9,12 +9,14 @@ so that anyone with one consumer GPU can reproduce it, check it, or continue fro
 
 <table>
 <tr>
-<td width="50%"><img src="results/goal-v02-fast-push-getup-walk-stop.gif" alt="velstand_fast.onnx: pushed over on the way to a goal, gets up, walks on, stops"></td>
-<td width="50%"><img src="results/goal-v4-push-getup-walk-stop.gif" alt="velstand_default.onnx (v4): the same exam"></td>
+<td width="34%"><img src="results/sideroll-left-right.gif" alt="sideroll.onnx: rolls one full turn to the left and gets up, then to the right"></td>
+<td width="33%"><img src="results/goal-v03-fast-push-walk-stop.gif" alt="velstand_fast.onnx: pushed on the way to a goal 1.5 m away, walks on, stops"></td>
+<td width="33%"><img src="results/goal-v4-push-getup-walk-stop.gif" alt="velstand_default.onnx (v4): pushed over on the way to a goal, gets up, walks on, stops"></td>
 </tr>
 <tr>
-<td><b>Fast variant</b> (<code>velstand_fast.onnx</code>): pushed at 1.0 m/s on the way to a goal 1.5 m away, up again, on target at 7.5 s</td>
-<td><b>Default</b> (<code>velstand_default.onnx</code>, v4): the same exam, on target at 8.4 s</td>
+<td><b>Side roll</b> (<code>sideroll.onnx</code>, new — no official counterpart): one full turn to the left, up again; then to the right. 98 % of 768 ducks per side</td>
+<td><b>Fast</b> (<code>velstand_fast.onnx</code>): pushed at 1.0 m/s on the way to a goal 1.5 m away — this one stays on its feet — on target at 5.4 s</td>
+<td><b>Default</b> (<code>velstand_default.onnx</code>, v4): the same exam; this one is pushed over, gets up, on target at 8.4 s</td>
 </tr>
 </table>
 
@@ -33,9 +35,10 @@ so that anyone with one consumer GPU can reproduce it, check it, or continue fro
 
 ## At a glance
 
-- **Policies you can use** — [release v0.2](https://github.com/xinhuagu/my-microduck-journal/releases/tag/v0.2):
+- **Policies you can use** — [release v0.3](https://github.com/xinhuagu/my-microduck-journal/releases/tag/v0.3):
   one network that walks, gets up from any fall and crouches / tilts on command, in two versions:
-  `velstand_default.onnx` (most robust) and `velstand_fast.onnx` (walks at the commanded speed).
+  `velstand_default.onnx` (most robust) and `velstand_fast.onnx` (walks at the commanded speed); and
+  `sideroll.onnx`, a skill the official set does not have — roll sideways, left or right, and get back up.
 - **Measured, not claimed** — one open exam ([`docs/benchmark.md`](docs/benchmark.md)) runs any
   policy through the same 256 randomised ducks × 3 seeds: get-up, push recovery, speed, turning,
   body commands, walking to a goal. The official policies are in the same table.
@@ -61,7 +64,7 @@ Same environment, 256 randomised ducks, 3 seeds; full table and raw JSON in
 |---|---|---|---|---|---|---|
 | official `velstand.onnx` (v7) | 96 % | 94 / 93 % | 0.14 m/s | 0.05 / 0.38 | −0.7 mm | 94 % |
 | **`velstand_default.onnx`** (v4) | **99 %** | **95 / 97 %** | 0.18 m/s | 0.39 / 1.10 | **−28.7 mm** | **96 %** |
-| **`velstand_fast.onnx`** (C) | **99 %** | 93 / 93 % | **0.29 m/s** | **0.58 / 1.02** | **−28.7 mm** | 95 % |
+| **`velstand_fast.onnx`** (S3) | **99 %** | **96 / 95 %** | **0.30 m/s** | 0.51 / 1.00 | −26.6 mm | **97 %** |
 
 **Teachers** (the policies the walk + get-up network learns from):
 
@@ -72,16 +75,25 @@ Same environment, 256 randomised ducks, 3 seeds; full table and raw JSON in
 | stand-up teacher: get-up face-down / face-up / on-side | 100 %, median 0.38 / 0.50 / 0.54 s | 100 %, median **0.28 / 0.44 / 0.50 s** (v3) |
 | stand-up teacher: crouch for −30 mm | +0.5 mm | **−28.2 mm** (v3) |
 
+**Side roll** (`sideroll.onnx`; the official set has a forward roll only) — standing start, one full turn
+about the long axis in the commanded direction, then standing (≥ 100 mm, tilt ≤ 15°) at the end of 6 s;
+256 ducks × 3 seeds:
+
+| | full turn and back on the feet | of which standing at the end | time for the turn | rolled the wrong way |
+|---|---|---|---|---|
+| roll left | **98.4 %** | 100 % | 0.94 s | 0 % |
+| roll right | **97.8 %** | 100 % | 0.92 s | 0 % |
+
 In short: the default is level with or ahead of the official policy on every column and crouches,
-which no official policy does; the fast variant walks at the commanded speed and turns on the spot,
-at the cost of a few points of push recovery.
+which no official policy does; the fast variant walks at the commanded speed and recovers push falls
+as well as the default, but turns on the spot less (0.51 for 0.6 rad/s) and crouches 2 mm less.
 
 ![Speed vs push recovery for every walk + get-up policy measured here](results/tradeoff.png)
 
 *Every walk + get-up policy measured with 3 seeds. Right is faster, up recovers more push falls (worst of
 the four cells, the number the release gate checks), colour is turning. The fast policies (right) have
-climbed from 83 % (A) to 92 % (C, released) to 95 % (S3, on the gate's edge, but turning only 0.51);
-none is inside the box yet with turning intact. Built by [`scripts/plot_tradeoff.py`](scripts/plot_tradeoff.py)
+climbed from 83 % (A) to 92 % (C, fast in v0.2) to 95 % (S3, fast in v0.3, on the gate's edge, but
+turning only 0.51); none is inside the box yet with turning intact. Built by [`scripts/plot_tradeoff.py`](scripts/plot_tradeoff.py)
 from the raw JSON.*
 
 ## What is different from the official setup
@@ -109,13 +121,14 @@ Every change is behind a `MICRODUCK_*` environment variable and off by default;
 | Stand-up teacher | ✅ | v3 gets up in 0.3–0.5 s, crouches, tilts ±20° |
 | Walk + get-up policy | ✅ | v4 = `velstand_default.onnx` |
 | Crouch / tilt while standing | ✅ | −28.7 mm for −30, within 1° at ±10° / ±20° |
-| Walking speed | ✅ | `velstand_fast.onnx`, 0.29 m/s for 0.30 |
+| Walking speed | ✅ | `velstand_fast.onnx`, 0.30 m/s for 0.30 |
 | Turning on the spot | ✅ / 🔄 | 0.6 and 1.0 rad/s tracked; 0.3 rad/s still a dead zone (official too) |
 | Walk to a goal (20-line controller on top) | ✅ | 100 % reached, 95–96 % after being pushed over on the way |
 | Open benchmark | ✅ | 12 policies, official and community included |
-| Fast **and** as robust as the default | 🔄 | close: a fast policy with 95–96 % push recovery exists but turns too little; more walk-teacher weight brings turning back and costs push recovery — next: a weight that depends on the command |
+| Fast **and** as robust as the default | 🔄 | close: `velstand_fast.onnx` (v0.3) recovers 95–96 % of push falls like the default, but turns 0.51 for 0.6 rad/s (gate 0.55); more walk-teacher weight brings turning back and costs push recovery — next: a weight that depends on the command |
 | Crouch / tilt **while walking** (second skill through the loop) | 🔄 | measured: every policy stops walking when a body command arrives; first attempt still stops (gate FAIL, nothing else broke) — [details](docs/training-log.md#second-skill-through-the-loop-crouch--tilt-while-walking-2026-10-19-0130) |
-| Release | ✅ | [v0.2](https://github.com/xinhuagu/my-microduck-journal/releases/tag/v0.2) (earlier: [v0.1](https://github.com/xinhuagu/my-microduck-journal/releases/tag/v0.1)) |
+| Side roll, left / right, and get up (new skill) | ✅ | 98 % per side, gate passed on the first of two budgeted runs — [details](docs/training-log.md#a-new-skill-side-roll-left-or-right-and-get-back-up-2026-10-19-2120) |
+| Release | ✅ | [v0.3](https://github.com/xinhuagu/my-microduck-journal/releases/tag/v0.3) (earlier: [v0.2](https://github.com/xinhuagu/my-microduck-journal/releases/tag/v0.2), [v0.1](https://github.com/xinhuagu/my-microduck-journal/releases/tag/v0.1)) |
 
 ## How it was built
 
@@ -165,10 +178,11 @@ The full write-up is [docs/findings.md](docs/findings.md); the short version:
 From the [Releases page](https://github.com/xinhuagu/my-microduck-journal/releases) (checkpoints
 are not in this repository):
 
-| file (v0.2) | what it is |
+| file (v0.3) | what it is |
 |---|---|
 | `velstand_default.onnx` | **the policy to use**: walks, gets up from any fall, crouch / tilt while standing |
-| `velstand_fast.onnx` | the same skills, walks at the commanded speed, recovers a few points fewer push falls |
+| `velstand_fast.onnx` | the same skills, walks at the commanded speed; turns on the spot less than the default |
+| `sideroll.onnx` | side roll: command `[0, +1, 0]` rolls left, `[0, −1, 0]` rolls right (the sideways slot of the velocity command); from standing, one full turn, standing still again about 1 s after the command |
 | `walk_teacher_v3.onnx`, `standup_teacher_v3.onnx` | the two teachers, to distil or compare against |
 | `eval_*.json`, `SHA256SUMS.txt` | the exam's raw output for the policies above, and checksums |
 

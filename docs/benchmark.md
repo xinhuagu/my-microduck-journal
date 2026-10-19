@@ -28,6 +28,7 @@ About 15 minutes per seed on an RTX 5090 shared with nothing else. The script al
 | push | standing, or walking at 0.30 m/s for 3 s; then the trunk's horizontal velocity is set to 1.0 or 1.2 m/s in a random direction; 6 s | fell = trunk below 90 mm; recovered of fallen (timed from the push), upright at the end |
 | tracking | 8 s per command: walk 0.15 / 0.30 / 0.45 m/s, turn in place ±0.3 / 0.6 / 1.0 rad/s | mean over the last 5 s of body-frame forward speed and yaw rate; per-env \|yaw\| median / p90 as drift |
 | body | standing; crouch −30 mm, raise +20 mm, roll ±10°, pitch ±10° and ±20°; 5 s each | achieved after 3 s (last 2 s), falls judged by tilt |
+| sideroll (added 2026-10-19, task `Mjlab-SideRoll-Flat-MicroDuck` only) | standing; roll left (command vy = +1), then right (−1); 6 s each | full turn = ≥ 330° about the long axis in the commanded direction (ground-supported, in the roll plane); success = full turn and standing (≥ 100 mm, tilt ≤ 15°) for the last 0.5 s; wrong way = half a turn the other way |
 | bodywalk (added 2026-10-19, not in the table below) | walking at 0.20 m/s, then crouch −20 mm, roll ±10°, pitch ±10°; 6 s each; the command's walking gate is bypassed for the trial so any policy can be measured | change against the same walk with a zero body command (per duck, last 3 s), speed while posing, falls by tilt |
 | goal | a goal 1.5 m away in a random direction, 30 s, with and without a 1.0 m/s push after 2 s; the controller in `goal_controller` (heading error → turn, distance → speed, inside 10 cm → stop) sits on top of the policy | reached = inside 10 cm for one continuous second; rate, median time, stop drift |
 
@@ -46,6 +47,7 @@ is in [`results/benchmark/`](../results/benchmark/).
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | official_velstand_v7 | 3 | 96 % ± 1 | 0.60 s ± 0.01 | 94 % ± 1 | 93 % ± 1 | 0.14 m/s ± 0.00 | 0.16 ± 0.01 | 0.00 ± 0.00 | 0.05 ± 0.01 | 0.38 ± 0.03 | -0.7 mm ± 0.0 | 8.0° ± 0.0 | 16.1° ± 0.0 | 7.8° ± 0.0 | 97 % ± 1 | 94 % ± 1 | 16.89 s ± 0.10 |
 | ours_velstand_v4 | 3 | 99 % ± 1 | 0.52 s ± 0.02 | 95 % ± 2 | 97 % ± 1 | 0.18 m/s ± 0.00 | 0.18 ± 0.01 | 0.00 ± 0.00 | 0.39 ± 0.01 | 1.10 ± 0.00 | -28.7 mm ± 0.1 | 10.0° ± 0.0 | 19.7° ± 0.0 | 9.6° ± 0.0 | 100 % ± 0 | 96 % ± 1 | 12.63 s ± 0.08 |
+| ours_velstand_fast_v03 | 3 | 99 % ± 0 | 0.54 s ± 0.01 | 96 % ± 2 | 95 % ± 1 | 0.30 m/s ± 0.00 | 0.07 ± 0.00 | 0.04 ± 0.01 | 0.51 ± 0.01 | 1.00 ± 0.00 | -26.6 mm ± 0.0 | 10.0° ± 0.0 | 20.1° ± 0.0 | 9.7° ± 0.0 | 100 % ± 0 | 97 % ± 1 | 9.29 s ± 0.21 |
 | ours_velstand_fast_v02 | 3 | 99 % ± 1 | 0.56 s ± 0.03 | 93 % ± 2 | 93 % ± 2 | 0.29 m/s ± 0.00 | 0.09 ± 0.00 | 0.00 ± 0.00 | 0.58 ± 0.00 | 1.02 ± 0.00 | -28.7 mm ± 0.0 | 10.0° ± 0.0 | 20.3° ± 0.1 | 9.5° ± 0.0 | 100 % ± 0 | 95 % ± 2 | 9.58 s ± 0.17 |
 | ours_velstand_v6 | 3 | 97 % ± 1 | 0.50 s ± 0.02 | 89 % ± 0 | 88 % ± 1 | 0.30 m/s ± 0.00 | 0.10 ± 0.01 | 0.00 ± 0.00 | 0.60 ± 0.01 | 1.08 ± 0.00 | -24.2 mm ± 0.0 | 9.7° ± 0.0 | 19.6° ± 0.0 | 9.8° ± 0.0 | 100 % ± 0 | 92 % ± 2 | 9.13 s ± 0.17 |
 | ours_velstand_v5_turning | 3 | 95 % ± 0 | 0.57 s ± 0.01 | 89 % ± 2 | 89 % ± 1 | 0.12 m/s ± 0.00 | 0.06 ± 0.00 | 0.02 ± 0.00 | 0.68 ± 0.00 | 1.12 ± 0.00 | -25.8 mm ± 0.1 | 9.8° ± 0.0 | 19.4° ± 0.0 | 9.1° ± 0.0 | 100 % ± 0 | 90 % ± 1 | 16.97 s ± 0.06 |
@@ -64,6 +66,8 @@ Reading the table:
   distilled from). `ours_*` are this repository's policies (releases v0.1 / v0.2 and the training log).
   `ours_velstand_v6` is v4 re-anchored to the speed-tracking walk teacher v3 (not in a release:
   faster and better at turning, recovers fewer push falls).
+  `ours_velstand_fast_v03` is `velstand_fast.onnx` of release v0.3 (S3: walk-teacher weight ×0.5, stand-up
+  imitation ×5 — push recovery like v4 at 0.30 m/s, turning 0.51).
   `ours_velstand_fast_v02` is `velstand_fast.onnx` of release v0.2 (candidate C): the same fast anchor
   with stronger stand-up imitation and more episodes starting on the side / back — the get-up is back
   to v4's level, push recovery 93 % against v4's 95–97 %; see [findings.md](findings.md).

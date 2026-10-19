@@ -1,0 +1,89 @@
+{
+ "name": "sideroll_v1_2000",
+ "task": "Mjlab-SideRoll-Flat-MicroDuck",
+ "checkpoint": "/home/ubuntu/microduck_rl/logs/rsl_rl/microduck_sideroll/2026-10-19_21-21-18_microduck_sideroll/model_2000.pt",
+ "num_envs": 256,
+ "seeds": [
+  0
+ ],
+ "per_seed": [
+  {
+   "sideroll": [
+    {
+     "direction": "left",
+     "n": 256,
+     "completed": 0.953125,
+     "up_at_end": 1.0,
+     "success": 0.953125,
+     "median_time_s": 0.9399999976158142,
+     "wrong_way": 0.0,
+     "rotation_deg_median": 357.7056884765625
+    },
+    {
+     "direction": "right",
+     "n": 256,
+     "completed": 0.9609375,
+     "up_at_end": 1.0,
+     "success": 0.9609375,
+     "median_time_s": 0.9399999976158142,
+     "wrong_way": 0.0,
+     "rotation_deg_median": 356.8464660644531
+    }
+   ],
+   "seed": 0,
+   "summary": {
+    "sideroll_success_left": 0.953125,
+    "sideroll_completed_left": 0.953125,
+    "sideroll_up_at_end_left": 1.0,
+    "sideroll_success_right": 0.9609375,
+    "sideroll_completed_right": 0.9609375,
+    "sideroll_up_at_end_right": 1.0,
+    "sideroll_wrong_way": 0.0,
+    "sideroll_time_s": 0.9399999976158142
+   }
+  }
+ ],
+ "aggregate": {
+  "sideroll_completed_left": {
+   "mean": 0.953125,
+   "std": 0.0,
+   "n": 1
+  },
+  "sideroll_completed_right": {
+   "mean": 0.9609375,
+   "std": 0.0,
+   "n": 1
+  },
+  "sideroll_success_left": {
+   "mean": 0.953125,
+   "std": 0.0,
+   "n": 1
+  },
+  "sideroll_success_right": {
+   "mean": 0.9609375,
+   "std": 0.0,
+   "n": 1
+  },
+  "sideroll_time_s": {
+   "mean": 0.9399999976158142,
+   "std": 0.0,
+   "n": 1
+  },
+  "sideroll_up_at_end_left": {
+   "mean": 1.0,
+   "std": 0.0,
+   "n": 1
+  },
+  "sideroll_up_at_end_right": {
+   "mean": 1.0,
+   "std": 0.0,
+   "n": 1
+  },
+  "sideroll_wrong_way": {
+   "mean": 0.0,
+   "std": 0.0,
+   "n": 1
+  }
+ },
+ "seconds": 16.547555685043335
+}

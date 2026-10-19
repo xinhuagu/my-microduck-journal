@@ -551,6 +551,21 @@ the commanded direction **and** standing (≥ 100 mm, tilt ≤ 15°) for the las
 success ≥ 80 % on each side, wrong way ≤ 5 %. At most two training runs; if the gate is not passed after the
 second, stop and record it as an open problem. Run 1: 6 000 iterations from scratch, one `lab.py` command.
 
+**Result (2026-10-20 01:08): gate PASS on run 1** — the second budgeted run was not needed. Training took 3 h 43 min
+(about 1.5 s per iteration; slower while a game shared the GPU), the sweep over 2000–5999 picked `model_4000`
+(single-seed success already 95 / 93 % at 2250), the 3-seed exam (raw JSON in `results/benchmark/sideroll_v1/`):
+
+| | full turn | standing at the end | **success** | time for the turn | wrong way |
+|---|---|---|---|---|---|
+| roll left | 98.4 % | 100 % | **98.4 %** | 0.94 s | 0 % |
+| roll right | 97.8 % | 100 % | **97.8 %** | 0.92 s | 0 % |
+
+Every seed within 2 points (left 97.3–99.2 %, right 97.3–98.4 %). Looked at frame by frame (0.1 s apart): tips
+to the side (0.2 s), over the back with the legs folded (0.3–0.5 s), over the other side (0.6–0.8 s), feet down
+and up (0.9–1.0 s), standing still from 1.1 s — the trunk stays on the ground throughout, no jump or flip.
+Fast (one turn in under a second) but a ground roll. Released as `sideroll.onnx` in v0.3, with the GIF in the
+README.
+
 ## Second skill through the loop: crouch / tilt while walking (2026-10-19 01:30)
 
 First run of the experiment loop as one tool ([`scripts/lab.py`](../scripts/lab.py), spec

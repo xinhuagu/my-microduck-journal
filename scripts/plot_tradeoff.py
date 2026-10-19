@@ -30,12 +30,12 @@ POLICIES = [  # (label, json, kind)
     ("v6", "ours_velstand_v6.json", "ours"),
     ("A", "v02_candidates/cand_A_v02.json", "ours"),
     ("B", "v02_candidates/cand_B_v02.json", "ours"),
-    ("C = fast", "ours_velstand_fast_v02.json", "release"),
+    ("C = fast v0.2", "ours_velstand_fast_v02.json", "release"),
     ("S2", "search_v03/full_S2_expert_x5.json", "ours"),
-    ("S3", "search_v03/full_S3_anchor_half_expert_x5.json", "ours"),
+    ("S3 = fast v0.3", "ours_velstand_fast_v03.json", "release"),
     ("S5", "search_v03/full_S5_anchor_075_expert_x5.json", "ours"),
 ]
-OFFSET = {"S5": (-24, 5), "S2": (8, -6), "C = fast": (-58, -4), "S3": (8, 2), "B": (8, -4), "v6": (8, -4)}
+OFFSET = {"S5": (-24, 5), "S2": (8, -6), "C = fast v0.2": (-82, -4), "S3 = fast v0.3": (-30, 9), "B": (8, -4), "v6": (8, -4)}
 
 
 def main():

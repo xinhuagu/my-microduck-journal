@@ -1,0 +1,25 @@
+=== 2026-10-19T21:21:08 LAB START sideroll_v1
+=== 2026-10-19T21:21:08 train: Mjlab-SideRoll-Flat-MicroDuck, scratch, 6000 iterations, 4096 envs, env {}
+=== 2026-10-20T01:04:18 train: done, run logs/rsl_rl/microduck_sideroll/2026-10-19_21-21-18_microduck_sideroll
+=== 2026-10-20T01:04:18 sweep: 9 checkpoints (sideroll, seeds 0)
+   2000  score +1.914  speed@0.30 0.00  turn 0.3/0.6 0.00/0.00  drift p90 0.00  push rec 1.0/1.2 0.00/0.00
+   2500  score +1.871  speed@0.30 0.00  turn 0.3/0.6 0.00/0.00  drift p90 0.00  push rec 1.0/1.2 0.00/0.00
+   3000  score +1.816  speed@0.30 0.00  turn 0.3/0.6 0.00/0.00  drift p90 0.00  push rec 1.0/1.2 0.00/0.00
+   3500  score +1.891  speed@0.30 0.00  turn 0.3/0.6 0.00/0.00  drift p90 0.00  push rec 1.0/1.2 0.00/0.00
+   4000  score +1.980  speed@0.30 0.00  turn 0.3/0.6 0.00/0.00  drift p90 0.00  push rec 1.0/1.2 0.00/0.00
+   4500  score +1.957  speed@0.30 0.00  turn 0.3/0.6 0.00/0.00  drift p90 0.00  push rec 1.0/1.2 0.00/0.00
+   5000  score +1.977  speed@0.30 0.00  turn 0.3/0.6 0.00/0.00  drift p90 0.00  push rec 1.0/1.2 0.00/0.00
+   5500  score +1.957  speed@0.30 0.00  turn 0.3/0.6 0.00/0.00  drift p90 0.00  push rec 1.0/1.2 0.00/0.00
+   5999  score +1.824  speed@0.30 0.00  turn 0.3/0.6 0.00/0.00  drift p90 0.00  push rec 1.0/1.2 0.00/0.00
+PICK 4000 PASS (score 1.98 = success left + right - 2 x wrong way (1.6 = 80 % each side))
+=== 2026-10-20T01:07:33 pick: model_4000.pt
+=== 2026-10-20T01:07:33 exam: sideroll, seeds 0,1,2
+=== 2026-10-20T01:08:29 export: exports/sideroll_v1_4000.onnx
+
+sideroll_v1  (/home/ubuntu/microduck_rl/logs/lab/sideroll_v1/exam.json)  -> PASS
+  ok   sideroll_success_left          0.984   (bar >= 0.8)
+  ok   sideroll_success_right         0.978   (bar >= 0.8)
+  ok   sideroll_wrong_way             0.000   (bar <= 0.05)
+=== 2026-10-20T01:08:29 gate: PASS
+=== 2026-10-20T01:08:29 ledger: /home/ubuntu/microduck_rl/logs/lab/ledger.jsonl
+=== 2026-10-20T01:08:29 PIPELINE DONE (lab sideroll_v1)

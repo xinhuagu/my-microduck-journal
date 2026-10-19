@@ -1,0 +1,161 @@
+{
+ "name": "sideroll_v1",
+ "task": "Mjlab-SideRoll-Flat-MicroDuck",
+ "checkpoint": "/home/ubuntu/microduck_rl/logs/rsl_rl/microduck_sideroll/2026-10-19_21-21-18_microduck_sideroll/model_4000.pt",
+ "num_envs": 256,
+ "seeds": [
+  0,
+  1,
+  2
+ ],
+ "per_seed": [
+  {
+   "sideroll": [
+    {
+     "direction": "left",
+     "n": 256,
+     "completed": 0.9921875,
+     "up_at_end": 1.0,
+     "success": 0.9921875,
+     "median_time_s": 0.9399999976158142,
+     "wrong_way": 0.0,
+     "rotation_deg_median": 356.51220703125
+    },
+    {
+     "direction": "right",
+     "n": 256,
+     "completed": 0.984375,
+     "up_at_end": 1.0,
+     "success": 0.984375,
+     "median_time_s": 0.9199999570846558,
+     "wrong_way": 0.0,
+     "rotation_deg_median": 356.90179443359375
+    }
+   ],
+   "seed": 0,
+   "summary": {
+    "sideroll_success_left": 0.9921875,
+    "sideroll_completed_left": 0.9921875,
+    "sideroll_up_at_end_left": 1.0,
+    "sideroll_success_right": 0.984375,
+    "sideroll_completed_right": 0.984375,
+    "sideroll_up_at_end_right": 1.0,
+    "sideroll_wrong_way": 0.0,
+    "sideroll_time_s": 0.929999977350235
+   }
+  },
+  {
+   "sideroll": [
+    {
+     "direction": "left",
+     "n": 256,
+     "completed": 0.97265625,
+     "up_at_end": 1.0,
+     "success": 0.97265625,
+     "median_time_s": 0.9399999976158142,
+     "wrong_way": 0.0,
+     "rotation_deg_median": 356.3409729003906
+    },
+    {
+     "direction": "right",
+     "n": 256,
+     "completed": 0.97265625,
+     "up_at_end": 1.0,
+     "success": 0.97265625,
+     "median_time_s": 0.9199999570846558,
+     "wrong_way": 0.0,
+     "rotation_deg_median": 356.81756591796875
+    }
+   ],
+   "seed": 1,
+   "summary": {
+    "sideroll_success_left": 0.97265625,
+    "sideroll_completed_left": 0.97265625,
+    "sideroll_up_at_end_left": 1.0,
+    "sideroll_success_right": 0.97265625,
+    "sideroll_completed_right": 0.97265625,
+    "sideroll_up_at_end_right": 1.0,
+    "sideroll_wrong_way": 0.0,
+    "sideroll_time_s": 0.929999977350235
+   }
+  },
+  {
+   "sideroll": [
+    {
+     "direction": "left",
+     "n": 256,
+     "completed": 0.98828125,
+     "up_at_end": 1.0,
+     "success": 0.98828125,
+     "median_time_s": 0.9399999976158142,
+     "wrong_way": 0.0,
+     "rotation_deg_median": 356.2713317871094
+    },
+    {
+     "direction": "right",
+     "n": 256,
+     "completed": 0.9765625,
+     "up_at_end": 1.0,
+     "success": 0.9765625,
+     "median_time_s": 0.9199999570846558,
+     "wrong_way": 0.0,
+     "rotation_deg_median": 356.7839050292969
+    }
+   ],
+   "seed": 2,
+   "summary": {
+    "sideroll_success_left": 0.98828125,
+    "sideroll_completed_left": 0.98828125,
+    "sideroll_up_at_end_left": 1.0,
+    "sideroll_success_right": 0.9765625,
+    "sideroll_completed_right": 0.9765625,
+    "sideroll_up_at_end_right": 1.0,
+    "sideroll_wrong_way": 0.0,
+    "sideroll_time_s": 0.929999977350235
+   }
+  }
+ ],
+ "aggregate": {
+  "sideroll_completed_left": {
+   "mean": 0.984375,
+   "std": 0.010334966058846057,
+   "n": 3
+  },
+  "sideroll_completed_right": {
+   "mean": 0.9778645833333334,
+   "std": 0.005966895436140417,
+   "n": 3
+  },
+  "sideroll_success_left": {
+   "mean": 0.984375,
+   "std": 0.010334966058846057,
+   "n": 3
+  },
+  "sideroll_success_right": {
+   "mean": 0.9778645833333334,
+   "std": 0.005966895436140417,
+   "n": 3
+  },
+  "sideroll_time_s": {
+   "mean": 0.929999977350235,
+   "std": 0.0,
+   "n": 3
+  },
+  "sideroll_up_at_end_left": {
+   "mean": 1.0,
+   "std": 0.0,
+   "n": 3
+  },
+  "sideroll_up_at_end_right": {
+   "mean": 1.0,
+   "std": 0.0,
+   "n": 3
+  },
+  "sideroll_wrong_way": {
+   "mean": 0.0,
+   "std": 0.0,
+   "n": 3
+  }
+ },
+ "seconds": 39.8058226108551
+}
