@@ -62,6 +62,7 @@ compare = ["logs/eval/<other>.json"]     # printed next to this experiment's ver
 | `s5_anchor_075_expert_x5.toml` | S5 written as a spec: produces the same training command as `scripts/pipeline_round8_anchor_075.sh` |
 | `_velstand_default_base.toml` | the default policy's setup (v4: walk teacher v1, stand-up teacher v3, body-wide) |
 | `bodywalk_v1.toml` | the second skill: crouch / tilt while walking, with its own gate in `[gate.bars]` |
+| `sideroll_v1.toml` | the side roll (new skill, released in v0.3): task, sweep, exam and its gate, with the two-run budget in the header |
 
 A gate can be the release gate (default) or a list of bars in the spec — any metric of the exam, plus
 `push_worst` (the worst of the four push-recovery cells):
